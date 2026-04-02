@@ -128,3 +128,24 @@
     @apply font-sans;
   }
 }
+
+/* react-data-grid — align with shadcn / Tailwind tokens */
+.rdg-wrap .rdg-theme {
+  --rdg-background-color: var(--background);
+  --rdg-header-background-color: var(--muted);
+  --rdg-row-hover-background-color: var(--accent);
+  --rdg-selection-color: color-mix(in oklch, var(--ring) 35%, transparent);
+  --rdg-border-color: var(--border);
+  --rdg-summary-border-color: var(--border);
+  --rdg-color: var(--foreground);
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+.rdg-wrap .rdg-cell {
+  border-inline-end: 1px solid var(--border);
+}
+
+.dark .rdg-wrap .rdg-theme {
+  --rdg-background-color: var(--background);
+  --rdg-header-background-color: var(--muted);
+}
