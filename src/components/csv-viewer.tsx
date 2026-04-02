@@ -63,12 +63,15 @@ export function CsvViewer() {
   const connRef = useRef<duckdb.AsyncDuckDBConnection | null>(null);
   const rowsRef = useRef<GridRow[]>([]);
   const loadedRef = useRef<Uint8Array | null>(null);
+  /** Must match `columnNames` for loads; updated synchronously in ingest before async loads (state is one render behind). */
+  const columnNamesRef = useRef<string[]>([]);
   const scrollRafRef = useRef<number | null>(null);
   const fetchInFlightRef = useRef(false);
 
   const [, setRenderTick] = useState(0);
   const bump = useCallback(() => setRenderTick((t) => t + 1), []);
   const [columnNames, setColumnNames] = useState<string[]>([]);
+  columnNamesRef.current = columnNames;
 
   const [status, setStatus] = useState<
     "idle" | "init-db" | "loading" | "ready" | "error"
@@ -132,7 +135,7 @@ export function CsvViewer() {
 
   const loadRange = useCallback(async (start: number, end: number) => {
     const conn = connRef.current;
-    const cols = columnNames;
+    const cols = columnNamesRef.current;
     const rows = rowsRef.current;
     const loaded = loadedRef.current;
     if (!conn || cols.length === 0 || !loaded || end <= start) return;
@@ -153,15 +156,15 @@ export function CsvViewer() {
       if (objects.length === 0) break;
       for (let r = 0; r < objects.length; r++) {
         const idx = chunkStart + r;
-        const target = rows[idx];
-        if (!target) continue;
-        Object.assign(target, objects[r]);
-        target.__loaded = true;
+        if (!rows[idx]) continue;
+        // New object reference so react-data-grid's memo(Row) re-renders after load
+        // (in-place mutation keeps `row` === previous and cells stay as placeholders).
+        rows[idx] = { ...objects[r], __idx: idx, __loaded: true };
         loaded[idx] = 1;
       }
       i = chunkStart + objects.length;
     }
-  }, [columnNames]);
+  }, []);
 
   const scheduleRangeLoad = useCallback(
     (scrollTop: number, clientHeight: number) => {
@@ -209,6 +212,7 @@ export function CsvViewer() {
       loadedRef.current = null;
       rowsRef.current = [];
       setColumnNames([]);
+      columnNamesRef.current = [];
       bump();
 
       const buf = await file.arrayBuffer();
@@ -238,6 +242,7 @@ export function CsvViewer() {
         names.push(String(nameCol?.get(i)));
       }
       setColumnNames(names);
+      columnNamesRef.current = names;
 
       const stubs: GridRow[] = new Array(n);
       const loaded = new Uint8Array(n);
