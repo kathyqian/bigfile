@@ -141,8 +141,23 @@
   font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
+/* RDG root defaults to border: 1px on all sides — drops a second line next to
+   the top bar border-b and footer border-t. Cells keep their own borders. */
+.rdg-wrap .rdg-theme.rdg-fill-grid {
+  border: none !important;
+}
+
 .rdg-wrap .rdg-cell {
   border-inline-end: 1px solid var(--border);
+}
+
+/*
+ * Bottom-most visible data row: cells normally draw border-block-end; the footer
+ * also has border-t — double line. Strip the row’s bottom border only for the
+ * last rendered .rdg-row (updates as you scroll). Header uses .rdg-header-row.
+ */
+.rdg-wrap .rdg-row:nth-last-child(1 of .rdg-row) .rdg-cell {
+  border-block-end: none !important;
 }
 
 .dark .rdg-wrap .rdg-theme {

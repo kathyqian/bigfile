@@ -7,6 +7,8 @@ import { DataGrid, type Column } from "react-data-grid";
 import "react-data-grid/lib/styles.css";
 import { FileSpreadsheet } from "lucide-react";
 
+import { AppFooter } from "@/components/app-footer";
+import { AppTopBar } from "@/components/app-topbar";
 import { createDuckDB } from "@/lib/duckdb-client";
 import { Button } from "@/components/ui/button";
 import {
@@ -272,19 +274,14 @@ export function CsvViewer() {
     e.target.value = "";
   };
 
+  const openFile = () => fileInputRef.current?.click();
+
+  const hasSpreadsheet = status === "ready";
+  const topBarDisabled = status === "init-db";
+  const isEmptyChrome = status === "idle" || status === "init-db";
+
   return (
-    <div
-      className={cn(
-        "flex flex-1 flex-col gap-4 p-4 md:p-6",
-        isDragging && "bg-accent/30",
-      )}
-      onDragOver={(e) => {
-        e.preventDefault();
-        setIsDragging(true);
-      }}
-      onDragLeave={() => setIsDragging(false)}
-      onDrop={onDrop}
-    >
+    <div className="bg-background flex h-dvh flex-col overflow-hidden">
       <input
         ref={fileInputRef}
         type="file"
@@ -293,91 +290,109 @@ export function CsvViewer() {
         onChange={onBrowse}
       />
 
-      {status === "idle" || status === "init-db" ? (
-        <Empty className="min-h-[40vh] border border-dashed">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <FileSpreadsheet className="size-4" />
-            </EmptyMedia>
-            <EmptyTitle>
-              {status === "init-db"
-                ? "Starting DuckDB…"
-                : "Open a CSV spreadsheet"}
-            </EmptyTitle>
-            <EmptyDescription>
-              Drag and drop a .csv file here, or choose a file to load it into
-              DuckDB in your browser and browse it read-only.
-            </EmptyDescription>
-          </EmptyHeader>
-          <Button
-            type="button"
-            variant="secondary"
-            disabled={status === "init-db"}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            Choose CSV
-          </Button>
-        </Empty>
-      ) : null}
+      <AppTopBar
+        fileLabel={fileLabel}
+        hasSpreadsheet={hasSpreadsheet}
+        showOpenFileButton={!isEmptyChrome}
+        openFileDisabled={topBarDisabled}
+        onOpenFile={openFile}
+      />
 
-      {status === "loading" ? (
-        <Empty className="min-h-[40vh] border border-dashed">
-          <EmptyHeader>
-            <EmptyTitle>Loading CSV…</EmptyTitle>
-            <EmptyDescription>
-              Importing into DuckDB WASM (this may take a while for large
-              files).
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      ) : null}
-
-      {status === "error" && error ? (
-        <Card className="border-destructive/50">
-          <CardHeader>
-            <CardTitle className="text-destructive">Something went wrong</CardTitle>
-            <CardDescription>{error}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setStatus("idle");
-                setError(null);
-              }}
-            >
-              Dismiss
-            </Button>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {status === "ready" ? (
-        <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <CardHeader className="shrink-0 flex-row flex-wrap items-center justify-between gap-2 space-y-0">
-            <div className="min-w-0">
-              <CardTitle className="truncate font-mono text-base">
-                {fileLabel}
-              </CardTitle>
-              <CardDescription>
-                {totalRows.toLocaleString()} rows · read-only · windowed load
-                {windowLoading ? " · fetching…" : ""}
-              </CardDescription>
+      <div
+        className={cn(
+          "flex min-h-0 flex-1 flex-col",
+          isDragging && "bg-accent/30",
+        )}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setIsDragging(true);
+        }}
+        onDragLeave={() => setIsDragging(false)}
+        onDrop={onDrop}
+      >
+        <main
+          className={cn(
+            "flex min-h-0 flex-1 flex-col",
+            status === "ready" ? "p-0" : "px-4 py-4 md:px-6",
+          )}
+        >
+          {status === "idle" || status === "init-db" ? (
+            <div className="flex min-h-0 flex-1 items-center justify-center">
+              <div className="max-h-[min(360px,50vh)] w-full max-w-md overflow-y-auto">
+                <Empty className="border-border border border-dashed">
+                  <EmptyHeader>
+                    <EmptyMedia variant="icon">
+                      <FileSpreadsheet className="size-4" />
+                    </EmptyMedia>
+                    <EmptyTitle>
+                      {status === "init-db"
+                        ? "Starting DuckDB…"
+                        : "Open a CSV spreadsheet"}
+                    </EmptyTitle>
+                    <EmptyDescription>
+                      Drag and drop a .csv file here, or choose a file to load.
+                      Everything stays in your browser (DuckDB WASM, read-only
+                      grid).
+                    </EmptyDescription>
+                  </EmptyHeader>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={status === "init-db"}
+                    onClick={openFile}
+                  >
+                    Choose CSV
+                  </Button>
+                </Empty>
+              </div>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              Open another file
-            </Button>
-          </CardHeader>
-          <CardContent className="min-h-0 flex-1 p-0 px-4 pb-4">
-            <div className="rdg-wrap border-border bg-background h-[min(70vh,720px)] w-full overflow-hidden rounded-md border">
+          ) : null}
+
+          {status === "loading" ? (
+            <div className="flex min-h-0 flex-1 items-center justify-center">
+              <div className="max-h-[min(360px,50vh)] w-full max-w-md overflow-y-auto">
+                <Empty className="border-border border border-dashed">
+                  <EmptyHeader>
+                    <EmptyTitle>Loading CSV…</EmptyTitle>
+                    <EmptyDescription>
+                      Importing into DuckDB WASM (this may take a while for large
+                      files).
+                    </EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
+              </div>
+            </div>
+          ) : null}
+
+          {status === "error" && error ? (
+            <div className="flex min-h-0 flex-1 items-center justify-center">
+              <Card className="border-destructive/50 w-full max-w-md">
+                <CardHeader>
+                  <CardTitle className="text-destructive">
+                    Something went wrong
+                  </CardTitle>
+                  <CardDescription>{error}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setStatus("idle");
+                      setError(null);
+                    }}
+                  >
+                    Dismiss
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          ) : null}
+
+          {status === "ready" ? (
+            <div className="rdg-wrap bg-background flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               <DataGrid
-                className="rdg-theme rdg-fill-grid"
+                className="rdg-theme rdg-fill-grid min-h-0 min-w-0 flex-1"
                 columns={columns}
                 rows={rowsRef.current}
                 rowKeyGetter={(row) => row.__idx}
@@ -394,8 +409,19 @@ export function CsvViewer() {
                 }}
               />
             </div>
-          </CardContent>
-        </Card>
+          ) : null}
+        </main>
+      </div>
+
+      {status !== "idle" && status !== "init-db" ? (
+        <AppFooter
+          totalRows={totalRows}
+          columnCount={columnNames.length}
+          showRowStats={status === "ready"}
+          windowLoading={windowLoading}
+          importing={status === "loading"}
+          loadError={status === "error"}
+        />
       ) : null}
     </div>
   );

@@ -13,8 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CSV viewer · DuckDB WASM",
-  description: "Drag and drop a CSV to explore it in a read-only spreadsheet.",
+  title: "Bigfile",
+  description:
+    "Drag and drop a CSV to explore it in your browser with DuckDB WASM.",
 };
 
 export default function RootLayout({
@@ -27,7 +28,9 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="bg-background flex min-h-dvh flex-col overflow-hidden">
+        {children}
+      </body>
     </html>
   );
 }
