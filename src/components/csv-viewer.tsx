@@ -113,6 +113,17 @@ export function CsvViewer() {
   const [windowLoading, setWindowLoading] = useState(false);
   const [filterDetailsOpen, setFilterDetailsOpen] = useState(false);
   const [sortDetailsOpen, setSortDetailsOpen] = useState(false);
+  /** True when the grid viewport overflows vertically (last-row border tweak in globals.css). */
+  const [gridScrollable, setGridScrollable] = useState(false);
+
+  const updateGridScrollable = useCallback(() => {
+    const el = gridRef.current?.element;
+    if (!el) {
+      setGridScrollable(false);
+      return;
+    }
+    setGridScrollable(el.scrollHeight > el.clientHeight + 0.5);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -143,6 +154,35 @@ export function CsvViewer() {
       })();
     };
   }, []);
+
+  useEffect(() => {
+    if (status !== "ready") {
+      setGridScrollable(false);
+      return;
+    }
+    let el: HTMLDivElement | null = null;
+    let ro: ResizeObserver | null = null;
+    let cancelled = false;
+
+    const setup = () => {
+      if (cancelled) return;
+      el = gridRef.current?.element ?? null;
+      if (!el) return;
+      updateGridScrollable();
+      ro = new ResizeObserver(() => updateGridScrollable());
+      ro.observe(el);
+      el.addEventListener("scroll", updateGridScrollable, { passive: true });
+    };
+
+    const id = requestAnimationFrame(() => requestAnimationFrame(setup));
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(id);
+      if (ro) ro.disconnect();
+      if (el) el.removeEventListener("scroll", updateGridScrollable);
+    };
+  }, [status, totalRows, updateGridScrollable]);
 
   const columnMetaMap = useMemo(
     () => new Map(columnMeta.map((m) => [m.name, m])),
@@ -236,7 +276,8 @@ export function CsvViewer() {
 
     await loadRange(0, Math.min(n, SCROLL_OVERSCAN_ROWS * 2 + 200));
     bump();
-  }, [bump, loadRange]);
+    requestAnimationFrame(() => updateGridScrollable());
+  }, [bump, loadRange, updateGridScrollable]);
 
   const handleSortAsc = useCallback(
     (columnKey: string) => {
@@ -381,6 +422,7 @@ export function CsvViewer() {
           try {
             await loadRange(first, last);
             bump();
+            requestAnimationFrame(() => updateGridScrollable());
           } catch (e) {
             setError(e instanceof Error ? e.message : String(e));
           } finally {
@@ -390,7 +432,7 @@ export function CsvViewer() {
         })();
       });
     },
-    [bump, loadRange],
+    [bump, loadRange, updateGridScrollable],
   );
 
   const ingestFile = async (file: File) => {
@@ -599,7 +641,12 @@ export function CsvViewer() {
           ) : null}
 
           {status === "ready" ? (
-            <div className="rdg-wrap bg-background flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <div
+              className={cn(
+                "rdg-wrap bg-background flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
+                gridScrollable && "rdg-scrollable",
+              )}
+            >
               <DataGrid
                 ref={gridRef}
                 className="rdg-theme rdg-fill-grid min-h-0 min-w-0 flex-1"
@@ -617,6 +664,7 @@ export function CsvViewer() {
                 onScroll={(e) => {
                   const t = e.currentTarget;
                   scheduleRangeLoad(t.scrollTop, t.clientHeight);
+                  updateGridScrollable();
                 }}
               />
             </div>
