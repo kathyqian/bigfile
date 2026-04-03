@@ -121,9 +121,7 @@ export function CsvViewer() {
       editable: false,
       renderCell({ row, column }) {
         if (!row.__loaded) {
-          return (
-            <span className="text-muted-foreground text-xs">…</span>
-          );
+          return <span className="text-muted-foreground text-xs">…</span>;
         }
         const v = row[column.key];
         if (v === null || v === undefined) return "";
@@ -168,12 +166,16 @@ export function CsvViewer() {
 
   const scheduleRangeLoad = useCallback(
     (scrollTop: number, clientHeight: number) => {
-      if (scrollRafRef.current !== null) cancelAnimationFrame(scrollRafRef.current);
+      if (scrollRafRef.current !== null)
+        cancelAnimationFrame(scrollRafRef.current);
       scrollRafRef.current = requestAnimationFrame(() => {
         scrollRafRef.current = null;
         const total = rowsRef.current.length;
         if (total === 0) return;
-        const first = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - SCROLL_OVERSCAN_ROWS);
+        const first = Math.max(
+          0,
+          Math.floor(scrollTop / ROW_HEIGHT) - SCROLL_OVERSCAN_ROWS,
+        );
         const last = Math.min(
           total,
           Math.ceil((scrollTop + clientHeight) / ROW_HEIGHT) +
@@ -321,7 +323,23 @@ export function CsvViewer() {
             status === "ready" ? "p-0" : "px-4 py-4 md:px-6",
           )}
         >
-          {status === "idle" || status === "init-db" ? (
+          {status === "init-db" ? (
+            <div className="flex min-h-0 flex-1 items-center justify-center">
+              <div className="flex w-full max-w-56 flex-col items-center gap-3">
+                <p className="text-muted-foreground text-sm">Loading...</p>
+                <div
+                  className="bg-muted h-2.5 w-full overflow-hidden rounded-full"
+                  role="progressbar"
+                  aria-busy="true"
+                  aria-label="Loading"
+                >
+                  <div className="bg-primary loading-bar-indeterminate h-full w-1/3 rounded-full" />
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {status === "idle" ? (
             <div className="flex min-h-0 flex-1 items-center justify-center">
               <div className="max-h-[min(360px,50vh)] w-full max-w-md overflow-y-auto">
                 <Empty className="border-border border border-dashed">
@@ -329,23 +347,13 @@ export function CsvViewer() {
                     <EmptyMedia variant="icon">
                       <FileSpreadsheet className="size-4" />
                     </EmptyMedia>
-                    <EmptyTitle>
-                      {status === "init-db"
-                        ? "Starting DuckDB…"
-                        : "Open a CSV spreadsheet"}
-                    </EmptyTitle>
+                    <EmptyTitle>Open a CSV spreadsheet</EmptyTitle>
                     <EmptyDescription>
                       Drag and drop a .csv file here, or choose a file to load.
-                      Everything stays in your browser (DuckDB WASM, read-only
-                      grid).
+                      Data stays in your browser and is processed locally.
                     </EmptyDescription>
                   </EmptyHeader>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    disabled={status === "init-db"}
-                    onClick={openFile}
-                  >
+                  <Button type="button" variant="secondary" onClick={openFile}>
                     Choose CSV
                   </Button>
                 </Empty>
@@ -360,7 +368,7 @@ export function CsvViewer() {
                   <EmptyHeader>
                     <EmptyTitle>Loading CSV…</EmptyTitle>
                     <EmptyDescription>
-                      Importing into DuckDB WASM (this may take a while for large
+                      Importing your file (this may take a while for large
                       files).
                     </EmptyDescription>
                   </EmptyHeader>

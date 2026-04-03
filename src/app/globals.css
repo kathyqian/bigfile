@@ -164,3 +164,16 @@
   --rdg-background-color: var(--background);
   --rdg-header-background-color: var(--muted);
 }
+
+@keyframes loading-bar-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
+}
+
+.loading-bar-indeterminate {
+  animation: loading-bar-slide 1.2s ease-in-out infinite;
+}
