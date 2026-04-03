@@ -3,13 +3,27 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type * as duckdb from "@duckdb/duckdb-wasm";
 import type { Table as ArrowTable } from "apache-arrow";
-import { DataGrid, type Column } from "react-data-grid";
+import { DataGrid, type Column, type DataGridHandle } from "react-data-grid";
 import "react-data-grid/lib/styles.css";
 import { FileSpreadsheet } from "lucide-react";
 
+import { CsvColumnHeader } from "@/components/csv-column-header";
 import { AppFooter } from "@/components/app-footer";
 import { AppTopBar } from "@/components/app-topbar";
 import { createDuckDB } from "@/lib/duckdb-client";
+import type { ColumnMeta } from "@/lib/column-type-meta";
+import { fetchTableColumnMeta } from "@/lib/column-type-meta";
+import {
+  buildOrderByClause,
+  buildWhereClause,
+  type ColumnFilter,
+  type FiltersMap,
+  countActiveColumnFilters,
+  listActiveFilterLines,
+  listSortDetails,
+  quoteIdent,
+  type SortColumn,
+} from "@/lib/csv-query";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -25,22 +39,29 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 const TABLE_NAME = "csv_data";
 const REGISTERED_NAME = "upload.csv";
 const ROW_HEIGHT = 35;
+const HEADER_ROW_HEIGHT = 56;
 const SCROLL_OVERSCAN_ROWS = 80;
 const FETCH_CHUNK_ROWS = 8000;
+/** Fetch up to N+1 rows to detect truncation */
+const MAX_DISTINCT = 10_000;
 
 export type GridRow = { __idx: number; __loaded?: boolean } & Record<
   string,
   unknown
 >;
-
-function quoteIdent(name: string): string {
-  return `"${name.replace(/"/g, '""')}"`;
-}
 
 function arrowTableToObjects(table: ArrowTable): Record<string, unknown>[] {
   const out: Record<string, unknown>[] = [];
@@ -59,19 +80,26 @@ function arrowTableToObjects(table: ArrowTable): Record<string, unknown>[] {
 
 export function CsvViewer() {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const gridRef = useRef<DataGridHandle>(null);
   const duckRef = useRef<Awaited<ReturnType<typeof createDuckDB>> | null>(null);
   const connRef = useRef<duckdb.AsyncDuckDBConnection | null>(null);
   const rowsRef = useRef<GridRow[]>([]);
   const loadedRef = useRef<Uint8Array | null>(null);
-  /** Must match `columnNames` for loads; updated synchronously in ingest before async loads (state is one render behind). */
   const columnNamesRef = useRef<string[]>([]);
+  const columnMetaMapRef = useRef<Map<string, ColumnMeta>>(new Map());
+  const sortColumnsRef = useRef<SortColumn[]>([]);
+  const filtersRef = useRef<FiltersMap>({});
   const scrollRafRef = useRef<number | null>(null);
   const fetchInFlightRef = useRef(false);
 
   const [, setRenderTick] = useState(0);
   const bump = useCallback(() => setRenderTick((t) => t + 1), []);
   const [columnNames, setColumnNames] = useState<string[]>([]);
+  const [columnMeta, setColumnMeta] = useState<ColumnMeta[]>([]);
   columnNamesRef.current = columnNames;
+
+  const [sortColumns, setSortColumns] = useState<SortColumn[]>([]);
+  const [filters, setFilters] = useState<FiltersMap>({});
 
   const [status, setStatus] = useState<
     "idle" | "init-db" | "loading" | "ready" | "error"
@@ -79,12 +107,16 @@ export function CsvViewer() {
   const [error, setError] = useState<string | null>(null);
   const [fileLabel, setFileLabel] = useState<string | null>(null);
   const [totalRows, setTotalRows] = useState(0);
+  /** Full table row count (no WHERE); used for "X out of Y rows" when filters apply. */
+  const [totalRowsUnfiltered, setTotalRowsUnfiltered] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [windowLoading, setWindowLoading] = useState(false);
+  const [filterDetailsOpen, setFilterDetailsOpen] = useState(false);
+  const [sortDetailsOpen, setSortDetailsOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    void (async () => {
       try {
         setStatus("init-db");
         const handle = await createDuckDB();
@@ -112,13 +144,196 @@ export function CsvViewer() {
     };
   }, []);
 
+  const columnMetaMap = useMemo(
+    () => new Map(columnMeta.map((m) => [m.name, m])),
+    [columnMeta],
+  );
+  columnMetaMapRef.current = columnMetaMap;
+
+  const loadDistinctForColumn = useCallback(async (columnKey: string) => {
+    const conn = connRef.current;
+    if (!conn) return { values: [] as (string | null)[], truncated: false };
+    const where = buildWhereClause(
+      filtersRef.current,
+      columnMetaMapRef.current,
+      columnKey,
+    );
+    const q = quoteIdent(columnKey);
+    const sql = `SELECT DISTINCT ${q} AS v FROM ${TABLE_NAME} ${where} ORDER BY v NULLS LAST LIMIT ${MAX_DISTINCT + 1}`;
+    const table = await conn.query(sql);
+    const col = table.getChild("v");
+    const values: (string | null)[] = [];
+    const n = table.numRows;
+    const truncated = n > MAX_DISTINCT;
+    const cap = truncated ? MAX_DISTINCT : n;
+    for (let i = 0; i < cap; i++) {
+      const raw = col?.get(i);
+      if (raw === null || raw === undefined) values.push(null);
+      else values.push(String(raw));
+    }
+    return { values, truncated };
+  }, []);
+
+  const loadRange = useCallback(async (start: number, end: number) => {
+    const conn = connRef.current;
+    const cols = columnNamesRef.current;
+    const rows = rowsRef.current;
+    const loaded = loadedRef.current;
+    if (!conn || cols.length === 0 || !loaded || end <= start) return;
+
+    const where = buildWhereClause(filtersRef.current, columnMetaMapRef.current);
+    const orderBy = buildOrderByClause(sortColumnsRef.current);
+    const list = cols.map(quoteIdent).join(", ");
+
+    let i = start;
+    while (i < end) {
+      if (loaded[i] === 1) {
+        i++;
+        continue;
+      }
+      const chunkStart = i;
+      const chunkSize = Math.min(FETCH_CHUNK_ROWS, rows.length - chunkStart);
+      if (chunkSize <= 0) break;
+      const sql = `SELECT ${list} FROM ${TABLE_NAME} ${where} ${orderBy} LIMIT ${chunkSize} OFFSET ${chunkStart};`;
+      const table = await conn.query(sql);
+      const objects = arrowTableToObjects(table as ArrowTable);
+      if (objects.length === 0) break;
+      for (let r = 0; r < objects.length; r++) {
+        const idx = chunkStart + r;
+        if (!rows[idx]) continue;
+        rows[idx] = { ...objects[r], __idx: idx, __loaded: true };
+        loaded[idx] = 1;
+      }
+      i = chunkStart + objects.length;
+    }
+  }, []);
+
+  const applyQueryAndReload = useCallback(async () => {
+    const conn = connRef.current;
+    const cols = columnNamesRef.current;
+    if (!conn || cols.length === 0) return;
+
+    const where = buildWhereClause(filtersRef.current, columnMetaMapRef.current);
+    const countRow = await conn.query(
+      `SELECT COUNT(*)::BIGINT AS c FROM ${TABLE_NAME} ${where};`,
+    );
+    const countCol = countRow.getChild("c");
+    const n = countCol ? Number(countCol.get(0)) : 0;
+
+    const stubs: GridRow[] = new Array(n);
+    const loaded = new Uint8Array(n);
+    for (let i = 0; i < n; i++) {
+      stubs[i] = { __idx: i, __loaded: false };
+    }
+    rowsRef.current = stubs;
+    loadedRef.current = loaded;
+    setTotalRows(n);
+    bump();
+
+    requestAnimationFrame(() => {
+      gridRef.current?.scrollToCell({ idx: 0, rowIdx: 0 });
+    });
+
+    await loadRange(0, Math.min(n, SCROLL_OVERSCAN_ROWS * 2 + 200));
+    bump();
+  }, [bump, loadRange]);
+
+  const handleSortAsc = useCallback(
+    (columnKey: string) => {
+      const cur = [...sortColumnsRef.current];
+      const i = cur.findIndex((s) => s.columnKey === columnKey);
+      if (i >= 0) cur[i] = { columnKey, direction: "ASC" };
+      else cur.push({ columnKey, direction: "ASC" });
+      sortColumnsRef.current = cur;
+      setSortColumns(cur);
+      void applyQueryAndReload();
+    },
+    [applyQueryAndReload],
+  );
+
+  const handleSortDesc = useCallback(
+    (columnKey: string) => {
+      const cur = [...sortColumnsRef.current];
+      const i = cur.findIndex((s) => s.columnKey === columnKey);
+      if (i >= 0) cur[i] = { columnKey, direction: "DESC" };
+      else cur.push({ columnKey, direction: "DESC" });
+      sortColumnsRef.current = cur;
+      setSortColumns(cur);
+      void applyQueryAndReload();
+    },
+    [applyQueryAndReload],
+  );
+
+  const handleSortClear = useCallback(
+    (columnKey: string) => {
+      const cur = sortColumnsRef.current.filter((s) => s.columnKey !== columnKey);
+      sortColumnsRef.current = cur;
+      setSortColumns(cur);
+      void applyQueryAndReload();
+    },
+    [applyQueryAndReload],
+  );
+
+  const handleFilterApply = useCallback(
+    (columnKey: string, f: ColumnFilter | null) => {
+      const next = { ...filtersRef.current };
+      if (f == null) delete next[columnKey];
+      else next[columnKey] = f;
+      filtersRef.current = next;
+      setFilters(next);
+      void applyQueryAndReload();
+    },
+    [applyQueryAndReload],
+  );
+
+  const clearAllFilters = useCallback(() => {
+    filtersRef.current = {};
+    setFilters({});
+    setFilterDetailsOpen(false);
+    void applyQueryAndReload();
+  }, [applyQueryAndReload]);
+
+  const clearAllSorting = useCallback(() => {
+    sortColumnsRef.current = [];
+    setSortColumns([]);
+    setSortDetailsOpen(false);
+    void applyQueryAndReload();
+  }, [applyQueryAndReload]);
+
   const columns: readonly Column<GridRow>[] = useMemo(() => {
+    const metaByName = columnMetaMap;
     return columnNames.map((name) => ({
       key: name,
       name,
       resizable: true,
       sortable: false,
       editable: false,
+      renderHeaderCell(p) {
+        const meta = metaByName.get(name);
+        if (!meta) {
+          return (
+            <span className="truncate px-1 font-medium" title={name}>
+              {name}
+            </span>
+          );
+        }
+        return (
+          <CsvColumnHeader
+            columnKey={name}
+            displayName={name}
+            typeLabel={meta.typeLabel}
+            filterMode={meta.filterMode}
+            sortColumns={sortColumns}
+            tabIndex={p.tabIndex}
+            filter={filters[name]}
+            onSortAsc={() => handleSortAsc(name)}
+            onSortDesc={() => handleSortDesc(name)}
+            onSortClear={() => handleSortClear(name)}
+            onFilterApply={(f) => handleFilterApply(name, f)}
+            loadDistinct={() => loadDistinctForColumn(name)}
+          />
+        );
+      },
       renderCell({ row, column }) {
         if (!row.__loaded) {
           return <span className="text-muted-foreground text-xs">…</span>;
@@ -129,40 +344,17 @@ export function CsvViewer() {
         return String(v);
       },
     }));
-  }, [columnNames]);
-
-  const loadRange = useCallback(async (start: number, end: number) => {
-    const conn = connRef.current;
-    const cols = columnNamesRef.current;
-    const rows = rowsRef.current;
-    const loaded = loadedRef.current;
-    if (!conn || cols.length === 0 || !loaded || end <= start) return;
-
-    const list = cols.map(quoteIdent).join(", ");
-    let i = start;
-    while (i < end) {
-      if (loaded[i] === 1) {
-        i++;
-        continue;
-      }
-      const chunkStart = i;
-      const chunkSize = Math.min(FETCH_CHUNK_ROWS, rows.length - chunkStart);
-      if (chunkSize <= 0) break;
-      const sql = `SELECT ${list} FROM ${TABLE_NAME} LIMIT ${chunkSize} OFFSET ${chunkStart};`;
-      const table = await conn.query(sql);
-      const objects = arrowTableToObjects(table as ArrowTable);
-      if (objects.length === 0) break;
-      for (let r = 0; r < objects.length; r++) {
-        const idx = chunkStart + r;
-        if (!rows[idx]) continue;
-        // New object reference so react-data-grid's memo(Row) re-renders after load
-        // (in-place mutation keeps `row` === previous and cells stay as placeholders).
-        rows[idx] = { ...objects[r], __idx: idx, __loaded: true };
-        loaded[idx] = 1;
-      }
-      i = chunkStart + objects.length;
-    }
-  }, []);
+  }, [
+    columnNames,
+    columnMetaMap,
+    sortColumns,
+    filters,
+    handleSortAsc,
+    handleSortDesc,
+    handleSortClear,
+    handleFilterApply,
+    loadDistinctForColumn,
+  ]);
 
   const scheduleRangeLoad = useCallback(
     (scrollTop: number, clientHeight: number) => {
@@ -214,7 +406,13 @@ export function CsvViewer() {
       loadedRef.current = null;
       rowsRef.current = [];
       setColumnNames([]);
+      setColumnMeta([]);
+      setTotalRowsUnfiltered(0);
       columnNamesRef.current = [];
+      sortColumnsRef.current = [];
+      filtersRef.current = {};
+      setSortColumns([]);
+      setFilters({});
       bump();
 
       const buf = await file.arrayBuffer();
@@ -229,37 +427,25 @@ export function CsvViewer() {
         SELECT * FROM read_csv_auto('${REGISTERED_NAME}');
       `);
 
-      const countRow = await conn.query(
-        `SELECT COUNT(*)::BIGINT AS c FROM ${TABLE_NAME};`,
-      );
-      const countCol = countRow.getChild("c");
-      const n = countCol ? Number(countCol.get(0)) : 0;
-
-      const ti = await conn.query(
-        `SELECT name FROM pragma_table_info('${TABLE_NAME}') ORDER BY cid;`,
-      );
-      const nameCol = ti.getChild("name");
-      const names: string[] = [];
-      for (let i = 0; i < ti.numRows; i++) {
-        names.push(String(nameCol?.get(i)));
-      }
+      const meta = await fetchTableColumnMeta(conn, TABLE_NAME);
+      const names = meta.map((m) => m.name);
+      const map = new Map(meta.map((m) => [m.name, m]));
+      columnMetaMapRef.current = map;
+      setColumnMeta(meta);
       setColumnNames(names);
       columnNamesRef.current = names;
 
-      const stubs: GridRow[] = new Array(n);
-      const loaded = new Uint8Array(n);
-      for (let i = 0; i < n; i++) {
-        stubs[i] = { __idx: i, __loaded: false };
-      }
-      rowsRef.current = stubs;
-      loadedRef.current = loaded;
-      setTotalRows(n);
+      const allCountRow = await conn.query(
+        `SELECT COUNT(*)::BIGINT AS c FROM ${TABLE_NAME};`,
+      );
+      const allC = allCountRow.getChild("c");
+      setTotalRowsUnfiltered(allC ? Number(allC.get(0)) : 0);
+
       setFileLabel(file.name);
       setStatus("ready");
       bump();
 
-      await loadRange(0, Math.min(n, SCROLL_OVERSCAN_ROWS * 2 + 200));
-      bump();
+      await applyQueryAndReload();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setStatus("error");
@@ -286,6 +472,16 @@ export function CsvViewer() {
   const hasSpreadsheet = status === "ready";
   const topBarDisabled = status === "init-db";
   const isEmptyChrome = status === "idle" || status === "init-db";
+
+  const activeFilterCount = countActiveColumnFilters(filters, columnMetaMap);
+  const activeFilterLines = useMemo(
+    () => listActiveFilterLines(filters, columnMetaMap),
+    [filters, columnMetaMap],
+  );
+  const sortDetailLines = useMemo(
+    () => listSortDetails(sortColumns),
+    [sortColumns],
+  );
 
   return (
     <div className="bg-background flex h-dvh flex-col overflow-hidden">
@@ -405,16 +601,18 @@ export function CsvViewer() {
           {status === "ready" ? (
             <div className="rdg-wrap bg-background flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               <DataGrid
+                ref={gridRef}
                 className="rdg-theme rdg-fill-grid min-h-0 min-w-0 flex-1"
                 columns={columns}
                 rows={rowsRef.current}
                 rowKeyGetter={(row) => row.__idx}
+                sortColumns={sortColumns}
                 defaultColumnOptions={{
                   resizable: true,
                   sortable: false,
                 }}
                 rowHeight={ROW_HEIGHT}
-                headerRowHeight={ROW_HEIGHT}
+                headerRowHeight={HEADER_ROW_HEIGHT}
                 enableVirtualization
                 onScroll={(e) => {
                   const t = e.currentTarget;
@@ -429,13 +627,87 @@ export function CsvViewer() {
       {status !== "idle" && status !== "init-db" ? (
         <AppFooter
           totalRows={totalRows}
+          totalRowsUnfiltered={totalRowsUnfiltered}
           columnCount={columnNames.length}
           showRowStats={status === "ready"}
           windowLoading={windowLoading}
           importing={status === "loading"}
           loadError={status === "error"}
+          activeFilterCount={activeFilterCount}
+          sortColumnCount={sortColumns.length}
+          onActiveFiltersClick={
+            status === "ready" && activeFilterCount > 0
+              ? () => setFilterDetailsOpen(true)
+              : undefined
+          }
+          onSortDetailsClick={
+            status === "ready" && sortColumns.length > 0
+              ? () => setSortDetailsOpen(true)
+              : undefined
+          }
         />
       ) : null}
+
+      <Dialog open={filterDetailsOpen} onOpenChange={setFilterDetailsOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Active filters</DialogTitle>
+            <DialogDescription>
+              Only rows that match all of the following conditions are shown
+              in the grid.
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="max-h-[min(60vh,22rem)] list-none space-y-3 overflow-y-auto pr-1">
+            {activeFilterLines.map(({ column, line }) => (
+              <li
+                key={column}
+                className="border-border border-b pb-3 text-sm last:border-b-0 last:pb-0"
+              >
+                <p className="text-foreground leading-snug">{line}</p>
+              </li>
+            ))}
+          </ul>
+          <DialogFooter className="mt-2">
+            <Button type="button" variant="outline" onClick={clearAllFilters}>
+              Clear all filters
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={sortDetailsOpen} onOpenChange={setSortDetailsOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Sort order</DialogTitle>
+            <DialogDescription>
+              Rows are ordered by these columns, from first (primary) to last
+              (tie-breaker).
+            </DialogDescription>
+          </DialogHeader>
+          <ol className="max-h-[min(60vh,22rem)] list-decimal space-y-3 overflow-y-auto pl-5 pr-1 text-sm">
+            {sortDetailLines.map(
+              ({ priority, columnKey, direction }) => (
+                <li
+                  key={`${columnKey}-${priority}`}
+                  className="border-border border-b pb-3 marker:font-medium last:border-b-0 last:pb-0"
+                >
+                  <span className="text-foreground font-medium">{columnKey}</span>
+                  <span className="text-muted-foreground">
+                    {" "}
+                    —{" "}
+                    {direction === "ASC" ? "Ascending" : "Descending"}
+                  </span>
+                </li>
+              ),
+            )}
+          </ol>
+          <DialogFooter className="mt-2">
+            <Button type="button" variant="outline" onClick={clearAllSorting}>
+              Clear all sorting
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
