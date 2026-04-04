@@ -78,6 +78,8 @@ const ROW_HEIGHT = 35;
 /** Shared styles for column letters (A, B, …) and row index gutter (1, 2, …). */
 const GUTTER_LABEL_CLASS =
   "font-normal font-mono tabular-nums text-xs text-muted-foreground";
+/** Grouped letter-row cell above the row-number column; RDG omits frozen inset on group headers. */
+const GUTTER_CORNER_LETTER_CLASS = "rdg-gutter-corner-letter";
 /** Tier with column names, filters, type label, and histogram. */
 const HEADER_MAIN_ROW_HEIGHT = 92;
 /** Column letters row — same pixel height as body rows ({@link ROW_HEIGHT}). Patched via {@link patchRdgHeaderLetterRow}. */
@@ -271,6 +273,13 @@ export function CsvViewer() {
         HEADER_MAIN_ROW_HEIGHT,
         HEADER_ROW_UNIFORM_HEIGHT,
       );
+      /* GroupedColumnHeaderCell does not merge getCellStyle; mirror frozen leaf headers. */
+      const corner = root.querySelector<HTMLElement>(
+        `.${GUTTER_CORNER_LETTER_CLASS}`,
+      );
+      if (corner) {
+        corner.style.insetInlineStart = "var(--rdg-frozen-left-0)";
+      }
       updateGridScrollable();
     });
     return () => cancelAnimationFrame(id);
@@ -580,7 +589,7 @@ export function CsvViewer() {
     /** Group so the corner matches data columns: blank tier (letters row), then row index tier. */
     const rowNumberColumnGroup: ColumnOrColumnGroup<GridRow> = {
       name: <span className="block h-full min-h-0 w-full" aria-hidden />,
-      headerCellClass: "rdg-col-letter-header",
+      headerCellClass: `rdg-col-letter-header ${GUTTER_CORNER_LETTER_CLASS}`,
       children: [
         {
           key: ROW_NUM_KEY,

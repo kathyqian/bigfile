@@ -180,6 +180,17 @@
   border-block-end: 1px solid var(--border);
 }
 
+/*
+ * RDG's GroupedColumnHeaderCell does not merge getCellStyle (no frozen inset).
+ * Class is on the row-gutter group header; csv-viewer also sets insetInlineStart inline.
+ */
+.rdg-wrap .rdg-gutter-corner-letter {
+  position: sticky;
+  inset-inline-start: var(--rdg-frozen-left-0, 0px);
+  /* Above unfrozen header cells in the same row (rdg HeaderRow uses 2–3 for .rdg-cell) */
+  z-index: 3;
+}
+
 @keyframes loading-bar-slide {
   0% {
     transform: translateX(-100%);
