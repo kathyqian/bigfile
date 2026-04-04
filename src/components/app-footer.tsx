@@ -89,7 +89,7 @@ export function AppFooter({
                     type="button"
                     onClick={onActiveFiltersClick}
                     aria-haspopup="dialog"
-                    className="text-muted-foreground hover:text-foreground inline cursor-pointer rounded-sm border-0 bg-transparent p-0 text-left text-inherit underline-offset-2 transition-colors hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                    className="text-muted-foreground hover:text-foreground inline cursor-pointer rounded-sm border-0 bg-transparent p-0 text-left underline-offset-2 transition-colors hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                   >
                     filtered by{" "}
                     <span className="text-foreground font-medium tabular-nums">
@@ -117,7 +117,7 @@ export function AppFooter({
                     type="button"
                     onClick={onSortDetailsClick}
                     aria-haspopup="dialog"
-                    className="text-muted-foreground hover:text-foreground inline cursor-pointer rounded-sm border-0 bg-transparent p-0 text-left text-inherit underline-offset-2 transition-colors hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                    className="text-muted-foreground hover:text-foreground inline cursor-pointer rounded-sm border-0 bg-transparent p-0 text-left underline-offset-2 transition-colors hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                   >
                     sorted by{" "}
                     <span className="text-foreground font-medium tabular-nums">
