@@ -38,15 +38,15 @@ export function AppTopBar({
             {fileLabel}
           </span>
         ) : null}
-        {showOpenFileButton ? (
+        {showOpenFileButton && !hasSpreadsheet ? (
           <Button
             type="button"
-            variant={hasSpreadsheet ? "outline" : "secondary"}
+            variant="secondary"
             size="sm"
             disabled={openFileDisabled}
             onClick={onOpenFile}
           >
-            {hasSpreadsheet ? "Open another file" : "Choose CSV"}
+            Choose CSV
           </Button>
         ) : null}
       </div>
