@@ -27,6 +27,7 @@ import { AppTopBar } from "@/components/app-topbar";
 import { createDuckDB } from "@/lib/duckdb-client";
 import type { ColumnMeta } from "@/lib/column-type-meta";
 import { fetchTableColumnMeta } from "@/lib/column-type-meta";
+import { fetchColumnHistogram } from "@/lib/column-histogram";
 import {
   buildOrderByClause,
   buildWhereClause,
@@ -71,8 +72,8 @@ const ROW_HEIGHT = 35;
 /** Shared styles for column letters (A, B, …) and row index gutter (1, 2, …). */
 const GUTTER_LABEL_CLASS =
   "font-normal font-mono tabular-nums text-xs text-muted-foreground";
-/** Tier with column names, filters, and type label. */
-const HEADER_MAIN_ROW_HEIGHT = 52;
+/** Tier with column names, filters, type label, and histogram. */
+const HEADER_MAIN_ROW_HEIGHT = 92;
 /** Column letters row — same pixel height as body rows ({@link ROW_HEIGHT}). Patched via {@link patchRdgHeaderLetterRow}. */
 const HEADER_LETTER_ROW_HEIGHT = ROW_HEIGHT;
 /**
@@ -301,6 +302,19 @@ export function CsvViewer() {
     return { values, truncated };
   }, []);
 
+  const loadHistogramForColumn = useCallback(
+    async (columnKey: string) => {
+      const conn = connRef.current;
+      const meta = columnMetaMap.get(columnKey);
+      if (!conn || !meta) {
+        return { kind: "empty" as const };
+      }
+      const where = buildWhereClause(filters, columnMetaMap);
+      return fetchColumnHistogram(conn, TABLE_NAME, meta, where);
+    },
+    [filters, columnMetaMap],
+  );
+
   const loadRange = useCallback(async (start: number, end: number) => {
     const conn = connRef.current;
     const cols = columnNamesRef.current;
@@ -500,6 +514,7 @@ export function CsvViewer() {
                 onSortClear={() => handleSortClear(name)}
                 onFilterApply={(f) => handleFilterApply(name, f)}
                 loadDistinct={() => loadDistinctForColumn(name)}
+                loadHistogramForColumn={loadHistogramForColumn}
               />
             );
           },
@@ -540,6 +555,7 @@ export function CsvViewer() {
     handleSortClear,
     handleFilterApply,
     loadDistinctForColumn,
+    loadHistogramForColumn,
   ]);
 
   const scheduleRangeLoad = useCallback(

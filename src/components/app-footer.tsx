@@ -67,8 +67,7 @@ export function AppFooter({
                 </span>{" "}
                 rows
               </>
-            )}
-            {" "}
+            )}{" "}
             ·{" "}
             <span className="text-foreground font-medium tabular-nums">
               {columnCount.toLocaleString()}

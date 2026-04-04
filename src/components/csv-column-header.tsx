@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown, ListFilter } from "lucide-react";
 
 import { NumericFilterPopoverBody } from "@/components/csv-filters/numeric-filter-popover";
@@ -23,6 +24,8 @@ import type {
   SortColumn,
   TextColumnFilter,
 } from "@/lib/csv-query";
+import { ColumnHistogramMini } from "@/components/column-histogram-mini";
+import type { ColumnHistogramData } from "@/lib/column-histogram";
 import { cn } from "@/lib/utils";
 
 function numericFilterKey(f: NumericColumnFilter | undefined): string {
@@ -53,6 +56,7 @@ type Props = {
     values: (string | null)[];
     truncated: boolean;
   }>;
+  loadHistogramForColumn: (columnKey: string) => Promise<ColumnHistogramData>;
 };
 
 function sortStateForColumn(
@@ -94,7 +98,34 @@ export function CsvColumnHeader({
   onSortClear,
   onFilterApply,
   loadDistinct,
+  loadHistogramForColumn,
 }: Props) {
+  const [histogram, setHistogram] = useState<ColumnHistogramData | null>(null);
+  const [histogramLoading, setHistogramLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setHistogramLoading(true);
+    setHistogram(null);
+    void (async () => {
+      try {
+        const d = await loadHistogramForColumn(columnKey);
+        if (!cancelled) {
+          setHistogram(d);
+          setHistogramLoading(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setHistogram({ kind: "empty" });
+          setHistogramLoading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [columnKey, loadHistogramForColumn]);
+
   const st = sortStateForColumn(sortColumns, columnKey);
   const hasSort = st !== undefined;
   const hasFilter = filterActive(filter, filterMode);
@@ -201,6 +232,9 @@ export function CsvColumnHeader({
       <span className="text-muted-foreground truncate text-[0.65rem] leading-tight">
         {typeLabel}
       </span>
+      <div className="w-full min-w-0">
+        <ColumnHistogramMini data={histogram} loading={histogramLoading} />
+      </div>
     </div>
   );
 }
