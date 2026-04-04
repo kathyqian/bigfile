@@ -25,6 +25,7 @@ import { CsvColumnHeader } from "@/components/csv-column-header";
 import { AppFooter } from "@/components/app-footer";
 import { AppTopBar } from "@/components/app-topbar";
 import { createDuckDB } from "@/lib/duckdb-client";
+import { arrowTableColumnNames, arrowTableToObjects } from "@/lib/arrow-table";
 import type { ColumnMeta } from "@/lib/column-type-meta";
 import { fetchTableColumnMeta } from "@/lib/column-type-meta";
 import { fetchColumnHistogram } from "@/lib/column-histogram";
@@ -39,6 +40,8 @@ import {
   quoteIdent,
   type SortColumn,
 } from "@/lib/csv-query";
+import { prepareReadOnlyQuery } from "@/lib/sql-guardrails";
+import { tableIdentifierFromFileName } from "@/lib/csv-table-name";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -63,8 +66,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { SqlQueryWorkspace } from "@/components/sql-query-workspace";
+import type { QueryResultState } from "@/components/sql-query-workspace";
 
-const TABLE_NAME = "csv_data";
 const REGISTERED_NAME = "upload.csv";
 /** Grid-only; avoids colliding with a CSV column named "row" or similar. */
 const ROW_NUM_KEY = "__rdg_rn__";
@@ -130,26 +134,13 @@ function excelColumnLabel(zeroBasedIndex: number): string {
   return s;
 }
 
-function arrowTableToObjects(table: ArrowTable): Record<string, unknown>[] {
-  const out: Record<string, unknown>[] = [];
-  const fields = table.schema.fields;
-  const n = table.numRows;
-  for (let i = 0; i < n; i++) {
-    const row: Record<string, unknown> = {};
-    for (const f of fields) {
-      const col = table.getChild(f.name);
-      row[f.name] = col?.get(i) ?? null;
-    }
-    out.push(row);
-  }
-  return out;
-}
-
 export function CsvViewer() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const gridRef = useRef<DataGridHandle>(null);
   const duckRef = useRef<Awaited<ReturnType<typeof createDuckDB>> | null>(null);
   const connRef = useRef<duckdb.AsyncDuckDBConnection | null>(null);
+  /** DuckDB table name derived from the loaded CSV file name (quoted in SQL via {@link quoteIdent}). */
+  const dataTableNameRef = useRef<string | null>(null);
   const rowsRef = useRef<GridRow[]>([]);
   const loadedRef = useRef<Uint8Array | null>(null);
   const columnNamesRef = useRef<string[]>([]);
@@ -173,6 +164,7 @@ export function CsvViewer() {
   >("idle");
   const [error, setError] = useState<string | null>(null);
   const [fileLabel, setFileLabel] = useState<string | null>(null);
+  const [dataTableName, setDataTableName] = useState<string | null>(null);
   const [totalRows, setTotalRows] = useState(0);
   /** Full table row count (no WHERE); used for "X out of Y rows" when filters apply. */
   const [totalRowsUnfiltered, setTotalRowsUnfiltered] = useState(0);
@@ -182,6 +174,15 @@ export function CsvViewer() {
   const [sortDetailsOpen, setSortDetailsOpen] = useState(false);
   /** True when the grid viewport overflows vertically (last-row border tweak in globals.css). */
   const [gridScrollable, setGridScrollable] = useState(false);
+
+  const [queryWorkspaceOpen, setQueryWorkspaceOpen] = useState(false);
+  const [queryWorkspaceSql, setQueryWorkspaceSql] = useState("");
+  const [queryWorkspaceResult, setQueryWorkspaceResult] =
+    useState<QueryResultState>(null);
+  const [queryWorkspaceError, setQueryWorkspaceError] = useState<string | null>(
+    null,
+  );
+  const [queryWorkspaceRunning, setQueryWorkspaceRunning] = useState(false);
 
   const updateGridScrollable = useCallback(() => {
     const el = gridRef.current?.element;
@@ -280,14 +281,16 @@ export function CsvViewer() {
 
   const loadDistinctForColumn = useCallback(async (columnKey: string) => {
     const conn = connRef.current;
-    if (!conn) return { values: [] as (string | null)[], truncated: false };
+    const tableId = dataTableNameRef.current;
+    if (!conn || !tableId) return { values: [] as (string | null)[], truncated: false };
+    const t = quoteIdent(tableId);
     const where = buildWhereClause(
       filtersRef.current,
       columnMetaMapRef.current,
       columnKey,
     );
     const q = quoteIdent(columnKey);
-    const sql = `SELECT DISTINCT ${q} AS v FROM ${TABLE_NAME} ${where} ORDER BY v NULLS LAST LIMIT ${MAX_DISTINCT + 1}`;
+    const sql = `SELECT DISTINCT ${q} AS v FROM ${t} ${where} ORDER BY v NULLS LAST LIMIT ${MAX_DISTINCT + 1}`;
     const table = await conn.query(sql);
     const col = table.getChild("v");
     const values: (string | null)[] = [];
@@ -306,11 +309,12 @@ export function CsvViewer() {
     async (columnKey: string) => {
       const conn = connRef.current;
       const meta = columnMetaMap.get(columnKey);
-      if (!conn || !meta) {
+      const tableId = dataTableNameRef.current;
+      if (!conn || !meta || !tableId) {
         return { kind: "empty" as const };
       }
       const where = buildWhereClause(filters, columnMetaMap);
-      return fetchColumnHistogram(conn, TABLE_NAME, meta, where);
+      return fetchColumnHistogram(conn, tableId, meta, where);
     },
     [filters, columnMetaMap],
   );
@@ -320,8 +324,11 @@ export function CsvViewer() {
     const cols = columnNamesRef.current;
     const rows = rowsRef.current;
     const loaded = loadedRef.current;
-    if (!conn || cols.length === 0 || !loaded || end <= start) return;
+    const tableId = dataTableNameRef.current;
+    if (!conn || !tableId || cols.length === 0 || !loaded || end <= start)
+      return;
 
+    const t = quoteIdent(tableId);
     const where = buildWhereClause(filtersRef.current, columnMetaMapRef.current);
     const orderBy = buildOrderByClause(sortColumnsRef.current);
     const list = cols.map(quoteIdent).join(", ");
@@ -335,7 +342,7 @@ export function CsvViewer() {
       const chunkStart = i;
       const chunkSize = Math.min(FETCH_CHUNK_ROWS, rows.length - chunkStart);
       if (chunkSize <= 0) break;
-      const sql = `SELECT ${list} FROM ${TABLE_NAME} ${where} ${orderBy} LIMIT ${chunkSize} OFFSET ${chunkStart};`;
+      const sql = `SELECT ${list} FROM ${t} ${where} ${orderBy} LIMIT ${chunkSize} OFFSET ${chunkStart};`;
       const table = await conn.query(sql);
       const objects = arrowTableToObjects(table as ArrowTable);
       if (objects.length === 0) break;
@@ -349,14 +356,44 @@ export function CsvViewer() {
     }
   }, []);
 
+  const runQueryWorkspace = useCallback(async () => {
+    const conn = connRef.current;
+    if (!conn) {
+      setQueryWorkspaceError("Database connection is not available.");
+      return;
+    }
+    setQueryWorkspaceRunning(true);
+    const prepared = prepareReadOnlyQuery(queryWorkspaceSql);
+    if ("error" in prepared) {
+      setQueryWorkspaceError(prepared.error);
+      setQueryWorkspaceRunning(false);
+      return;
+    }
+    setQueryWorkspaceError(null);
+    try {
+      const table = (await conn.query(prepared.sql)) as ArrowTable;
+      const rows = arrowTableToObjects(table);
+      const columns = arrowTableColumnNames(table);
+      setQueryWorkspaceResult({ columns, rows });
+    } catch (e) {
+      setQueryWorkspaceError(
+        e instanceof Error ? e.message : String(e),
+      );
+    } finally {
+      setQueryWorkspaceRunning(false);
+    }
+  }, [queryWorkspaceSql]);
+
   const applyQueryAndReload = useCallback(async () => {
     const conn = connRef.current;
     const cols = columnNamesRef.current;
-    if (!conn || cols.length === 0) return;
+    const tableId = dataTableNameRef.current;
+    if (!conn || !tableId || cols.length === 0) return;
 
+    const t = quoteIdent(tableId);
     const where = buildWhereClause(filtersRef.current, columnMetaMapRef.current);
     const countRow = await conn.query(
-      `SELECT COUNT(*)::BIGINT AS c FROM ${TABLE_NAME} ${where};`,
+      `SELECT COUNT(*)::BIGINT AS c FROM ${t} ${where};`,
     );
     const countCol = countRow.getChild("c");
     const n = countCol ? Number(countCol.get(0)) : 0;
@@ -604,6 +641,12 @@ export function CsvViewer() {
     }
     setStatus("loading");
     try {
+      setQueryWorkspaceOpen(false);
+      setQueryWorkspaceSql("");
+      setQueryWorkspaceResult(null);
+      setQueryWorkspaceError(null);
+      dataTableNameRef.current = null;
+      setDataTableName(null);
       await connRef.current?.close().catch(() => {});
       connRef.current = null;
       loadedRef.current = null;
@@ -625,12 +668,18 @@ export function CsvViewer() {
       const conn = await db.connect();
       connRef.current = conn;
 
+      const tableId = tableIdentifierFromFileName(file.name);
+      const tableQuoted = quoteIdent(tableId);
+      dataTableNameRef.current = tableId;
+      setDataTableName(tableId);
+      setQueryWorkspaceSql(`SELECT * FROM ${tableQuoted}`);
+
       await conn.query(`
-        CREATE OR REPLACE TABLE ${TABLE_NAME} AS
+        CREATE OR REPLACE TABLE ${tableQuoted} AS
         SELECT * FROM read_csv_auto('${REGISTERED_NAME}');
       `);
 
-      const meta = await fetchTableColumnMeta(conn, TABLE_NAME);
+      const meta = await fetchTableColumnMeta(conn, tableId);
       const names = meta.map((m) => m.name);
       const map = new Map(meta.map((m) => [m.name, m]));
       columnMetaMapRef.current = map;
@@ -639,7 +688,7 @@ export function CsvViewer() {
       columnNamesRef.current = names;
 
       const allCountRow = await conn.query(
-        `SELECT COUNT(*)::BIGINT AS c FROM ${TABLE_NAME};`,
+        `SELECT COUNT(*)::BIGINT AS c FROM ${tableQuoted};`,
       );
       const allC = allCountRow.getChild("c");
       setTotalRowsUnfiltered(allC ? Number(allC.get(0)) : 0);
@@ -854,6 +903,8 @@ export function CsvViewer() {
               ? () => setSortDetailsOpen(true)
               : undefined
           }
+          onQueryDataClick={() => setQueryWorkspaceOpen(true)}
+          queryDataDisabled={status !== "ready"}
         />
       ) : null}
 
@@ -883,6 +934,20 @@ export function CsvViewer() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <SqlQueryWorkspace
+        open={queryWorkspaceOpen}
+        onOpenChange={setQueryWorkspaceOpen}
+        tableIdentifier={dataTableName}
+        columnMeta={columnMeta}
+        sql={queryWorkspaceSql}
+        onSqlChange={setQueryWorkspaceSql}
+        result={queryWorkspaceResult}
+        error={queryWorkspaceError}
+        running={queryWorkspaceRunning}
+        onRun={runQueryWorkspace}
+        queryDataDisabled={status !== "ready"}
+      />
 
       <Dialog open={sortDetailsOpen} onOpenChange={setSortDetailsOpen}>
         <DialogContent className="sm:max-w-lg">

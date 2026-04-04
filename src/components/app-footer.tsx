@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 type AppFooterProps = {
@@ -18,6 +19,9 @@ type AppFooterProps = {
   sortColumnCount?: number;
   /** Opens the sort-order details modal. */
   onSortDetailsClick?: () => void;
+  /** Opens the SQL query workspace (spreadsheet ready only). */
+  onQueryDataClick?: () => void;
+  queryDataDisabled?: boolean;
   className?: string;
 };
 
@@ -33,6 +37,8 @@ export function AppFooter({
   onActiveFiltersClick,
   sortColumnCount = 0,
   onSortDetailsClick,
+  onQueryDataClick,
+  queryDataDisabled,
   className,
 }: AppFooterProps) {
   return (
@@ -42,7 +48,8 @@ export function AppFooter({
         className,
       )}
     >
-      <div className="min-w-0">
+      <div className="flex w-full min-w-0 items-center justify-between gap-4">
+        <div className="min-w-0 flex-1">
         {loadError ? (
           "Load failed — see message above"
         ) : importing ? (
@@ -131,6 +138,19 @@ export function AppFooter({
             ) : null}
             {windowLoading ? " · fetching…" : ""}
           </>
+        ) : null}
+        </div>
+        {onQueryDataClick ? (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="shrink-0"
+            disabled={queryDataDisabled}
+            onClick={onQueryDataClick}
+          >
+            Query Data
+          </Button>
         ) : null}
       </div>
     </footer>
