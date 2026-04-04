@@ -1,7 +1,13 @@
 "use client";
 
-import { useCallback, useRef } from "react";
-import { Play } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import { Play, Plus, X } from "lucide-react";
 
 import type { ColumnMeta } from "@/lib/column-type-meta";
 import { Button } from "@/components/ui/button";
@@ -21,17 +27,29 @@ export type QueryResultState = {
   rows: Record<string, unknown>[];
 } | null;
 
+export type QueryWorkspaceTab = {
+  id: string;
+  /** User-visible tab title (editable). */
+  label: string;
+  sql: string;
+  result: QueryResultState;
+  error: string | null;
+};
+
 type SqlQueryWorkspaceProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** DuckDB table identifier derived from the loaded CSV file name. */
   tableIdentifier: string | null;
   columnMeta: ColumnMeta[];
-  sql: string;
+  tabs: QueryWorkspaceTab[];
+  activeTabId: string | null;
+  onActiveTabChange: (id: string) => void;
   onSqlChange: (sql: string) => void;
-  result: QueryResultState;
-  error: string | null;
-  running: boolean;
+  onAddTab: () => void;
+  onCloseTab: (id: string) => void;
+  onTabLabelChange: (id: string, label: string) => void;
+  runningTabId: string | null;
   onRun: () => void;
   queryDataDisabled?: boolean;
 };
@@ -47,15 +65,67 @@ export function SqlQueryWorkspace({
   onOpenChange,
   tableIdentifier,
   columnMeta,
-  sql,
+  tabs,
+  activeTabId,
+  onActiveTabChange,
   onSqlChange,
-  result,
-  error,
-  running,
+  onAddTab,
+  onCloseTab,
+  onTabLabelChange,
+  runningTabId,
   onRun,
   queryDataDisabled,
 }: SqlQueryWorkspaceProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const renameInputRef = useRef<HTMLInputElement>(null);
+  const skipBlurCommitRef = useRef(false);
+  const [editingTabId, setEditingTabId] = useState<string | null>(null);
+  const [draftLabel, setDraftLabel] = useState("");
+
+  useEffect(() => {
+    if (!open) {
+      skipBlurCommitRef.current = false;
+      setEditingTabId(null);
+      setDraftLabel("");
+    }
+  }, [open]);
+
+  const commitRename = useCallback(() => {
+    if (editingTabId == null) return;
+    onTabLabelChange(editingTabId, draftLabel);
+    setEditingTabId(null);
+    setDraftLabel("");
+  }, [draftLabel, editingTabId, onTabLabelChange]);
+
+  const cancelRename = useCallback(() => {
+    skipBlurCommitRef.current = true;
+    setEditingTabId(null);
+    setDraftLabel("");
+  }, []);
+
+  const handleRenameBlur = useCallback(() => {
+    if (skipBlurCommitRef.current) {
+      skipBlurCommitRef.current = false;
+      return;
+    }
+    commitRename();
+  }, [commitRename]);
+
+  useLayoutEffect(() => {
+    if (editingTabId == null) return;
+    const el = renameInputRef.current;
+    if (!el) return;
+    el.focus();
+    el.select();
+  }, [editingTabId]);
+
+  const activeTab =
+    tabs.find((t) => t.id === activeTabId) ?? tabs[0] ?? null;
+  const sql = activeTab?.sql ?? "";
+  const result = activeTab?.result ?? null;
+  const error = activeTab?.error ?? null;
+  const running =
+    activeTabId != null && runningTabId === activeTabId;
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -67,6 +137,11 @@ export function SqlQueryWorkspace({
     },
     [onRun, queryDataDisabled, running],
   );
+
+  const editorId =
+    activeTabId != null
+      ? `sql-query-editor-${activeTabId}`
+      : "sql-query-editor";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -108,12 +183,115 @@ export function SqlQueryWorkspace({
             </aside>
 
             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                <div className="bg-muted/15 flex min-h-0 flex-1 flex-col p-3 md:p-4">
+              <div
+                className="bg-muted/80 dark:bg-muted/50 flex min-h-0 shrink-0 items-center gap-0 overflow-x-auto p-0"
+                role="tablist"
+                aria-label="Query tabs"
+              >
+                {tabs.map((tab) => {
+                  const isActive = tab.id === activeTabId;
+                  const canClose = tabs.length > 1;
+                  const isEditing = editingTabId === tab.id;
+                  return (
+                    <div
+                      key={tab.id}
+                      className={cn(
+                        "flex max-w-[min(100%,12rem)] min-h-8 shrink-0 items-center border-r border-border",
+                        isActive
+                          ? "border-b-0 bg-background text-foreground"
+                          : "border-b border-border bg-muted/40 text-muted-foreground hover:bg-muted/55 hover:text-foreground dark:bg-muted/25 dark:hover:bg-muted/40",
+                      )}
+                    >
+                      {isEditing ? (
+                        <input
+                          ref={renameInputRef}
+                          type="text"
+                          value={draftLabel}
+                          onChange={(e) => setDraftLabel(e.target.value)}
+                          onBlur={handleRenameBlur}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              skipBlurCommitRef.current = true;
+                              commitRename();
+                            }
+                            if (e.key === "Escape") {
+                              e.preventDefault();
+                              cancelRename();
+                            }
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="border-input bg-background text-foreground placeholder:text-muted-foreground max-w-full min-w-16 flex-1 px-2 py-1 text-xs font-medium outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          aria-label="Tab name"
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          role="tab"
+                          aria-selected={isActive}
+                          className="min-w-0 flex-1 truncate px-2.5 py-1.5 text-left text-xs font-medium"
+                          onClick={() => {
+                            if (activeTabId === tab.id) {
+                              setEditingTabId(tab.id);
+                              setDraftLabel(tab.label);
+                            } else {
+                              onActiveTabChange(tab.id);
+                            }
+                          }}
+                        >
+                          {tab.label}
+                        </button>
+                      )}
+                      {canClose ? (
+                        <button
+                          type="button"
+                          className={cn(
+                            "shrink-0 rounded-sm p-1",
+                            isActive
+                              ? "text-muted-foreground hover:text-foreground"
+                              : "text-muted-foreground/80 hover:text-foreground",
+                          )}
+                          aria-label={`Close ${tab.label}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onCloseTab(tab.id);
+                          }}
+                        >
+                          <X className="size-3.5" />
+                        </button>
+                      ) : null}
+                    </div>
+                  );
+                })}
+                <button
+                  type="button"
+                  className={cn(
+                    "inline-flex h-8 min-w-8 shrink-0 items-center justify-center rounded-none",
+                    "border-0 border-r border-b border-solid border-border bg-muted/40",
+                    "text-muted-foreground hover:bg-muted/55 hover:text-foreground",
+                    "dark:bg-muted/25 dark:hover:bg-muted/40",
+                    "outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                    "disabled:pointer-events-none disabled:opacity-50",
+                  )}
+                  aria-label="New query tab"
+                  disabled={queryDataDisabled}
+                  onClick={onAddTab}
+                >
+                  <Plus className="size-4" aria-hidden />
+                </button>
+                {/* Fills the rest of the tab row so the bottom border continues past the + control */}
+                <div
+                  className="bg-muted/80 dark:bg-muted/50 min-h-8 min-w-0 flex-1 border-b border-border"
+                  aria-hidden
+                />
+              </div>
+
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-t-0">
+                <div className="bg-muted/15 flex min-h-0 flex-1 flex-col border-t-0 p-3 md:p-4">
                   <div className="mb-2 flex min-w-0 shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2">
                     <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
                       <label
-                        htmlFor="sql-query-editor"
+                        htmlFor={editorId}
                         className="text-muted-foreground shrink-0 text-xs font-medium"
                       >
                         Editor
@@ -141,8 +319,9 @@ export function SqlQueryWorkspace({
                     </div>
                   </div>
                   <textarea
+                    key={activeTabId ?? "none"}
                     ref={textareaRef}
-                    id="sql-query-editor"
+                    id={editorId}
                     value={sql}
                     onChange={(e) => onSqlChange(e.target.value)}
                     onKeyDown={handleKeyDown}

@@ -66,8 +66,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { SqlQueryWorkspace } from "@/components/sql-query-workspace";
-import type { QueryResultState } from "@/components/sql-query-workspace";
+import {
+  SqlQueryWorkspace,
+  type QueryWorkspaceTab,
+} from "@/components/sql-query-workspace";
 
 const REGISTERED_NAME = "upload.csv";
 /** Grid-only; avoids colliding with a CSV column named "row" or similar. */
@@ -176,13 +178,20 @@ export function CsvViewer() {
   const [gridScrollable, setGridScrollable] = useState(false);
 
   const [queryWorkspaceOpen, setQueryWorkspaceOpen] = useState(false);
-  const [queryWorkspaceSql, setQueryWorkspaceSql] = useState("");
-  const [queryWorkspaceResult, setQueryWorkspaceResult] =
-    useState<QueryResultState>(null);
-  const [queryWorkspaceError, setQueryWorkspaceError] = useState<string | null>(
-    null,
-  );
-  const [queryWorkspaceRunning, setQueryWorkspaceRunning] = useState(false);
+  const [queryWorkspaceTabs, setQueryWorkspaceTabs] = useState<
+    QueryWorkspaceTab[]
+  >([]);
+  const [queryWorkspaceActiveTabId, setQueryWorkspaceActiveTabId] = useState<
+    string | null
+  >(null);
+  const [queryWorkspaceRunningTabId, setQueryWorkspaceRunningTabId] = useState<
+    string | null
+  >(null);
+
+  const queryWorkspaceTabsRef = useRef<QueryWorkspaceTab[]>([]);
+  queryWorkspaceTabsRef.current = queryWorkspaceTabs;
+  const queryWorkspaceActiveTabIdRef = useRef<string | null>(null);
+  queryWorkspaceActiveTabIdRef.current = queryWorkspaceActiveTabId;
 
   const updateGridScrollable = useCallback(() => {
     const el = gridRef.current?.element;
@@ -357,31 +366,118 @@ export function CsvViewer() {
 
   const runQueryWorkspace = useCallback(async () => {
     const conn = connRef.current;
+    const activeId = queryWorkspaceActiveTabIdRef.current;
+    const tab = activeId
+      ? queryWorkspaceTabsRef.current.find((t) => t.id === activeId)
+      : undefined;
     if (!conn) {
-      setQueryWorkspaceError("Database connection is not available.");
+      if (activeId) {
+        setQueryWorkspaceTabs((prev) =>
+          prev.map((t) =>
+            t.id === activeId
+              ? {
+                  ...t,
+                  error: "Database connection is not available.",
+                }
+              : t,
+          ),
+        );
+      }
       return;
     }
-    setQueryWorkspaceRunning(true);
-    const prepared = prepareReadOnlyQuery(queryWorkspaceSql);
+    if (!activeId || !tab) return;
+
+    setQueryWorkspaceRunningTabId(activeId);
+    const prepared = prepareReadOnlyQuery(tab.sql);
     if ("error" in prepared) {
-      setQueryWorkspaceError(prepared.error);
-      setQueryWorkspaceRunning(false);
+      setQueryWorkspaceTabs((prev) =>
+        prev.map((t) =>
+          t.id === activeId ? { ...t, error: prepared.error } : t,
+        ),
+      );
+      setQueryWorkspaceRunningTabId(null);
       return;
     }
-    setQueryWorkspaceError(null);
+    setQueryWorkspaceTabs((prev) =>
+      prev.map((t) => (t.id === activeId ? { ...t, error: null } : t)),
+    );
     try {
       const table = (await conn.query(prepared.sql)) as ArrowTable;
       const rows = arrowTableToObjects(table);
       const columns = arrowTableColumnNames(table);
-      setQueryWorkspaceResult({ columns, rows });
+      setQueryWorkspaceTabs((prev) =>
+        prev.map((t) =>
+          t.id === activeId
+            ? { ...t, result: { columns, rows }, error: null }
+            : t,
+        ),
+      );
     } catch (e) {
-      setQueryWorkspaceError(
-        e instanceof Error ? e.message : String(e),
+      setQueryWorkspaceTabs((prev) =>
+        prev.map((t) =>
+          t.id === activeId
+            ? {
+                ...t,
+                error: e instanceof Error ? e.message : String(e),
+              }
+            : t,
+        ),
       );
     } finally {
-      setQueryWorkspaceRunning(false);
+      setQueryWorkspaceRunningTabId(null);
     }
-  }, [queryWorkspaceSql]);
+  }, []);
+
+  const handleQueryWorkspaceSqlChange = useCallback((sql: string) => {
+    const activeId = queryWorkspaceActiveTabIdRef.current;
+    if (!activeId) return;
+    setQueryWorkspaceTabs((prev) =>
+      prev.map((t) => (t.id === activeId ? { ...t, sql } : t)),
+    );
+  }, []);
+
+  const addQueryWorkspaceTab = useCallback(() => {
+    const tableId = dataTableNameRef.current;
+    const sql = tableId ? `SELECT * FROM ${quoteIdent(tableId)}` : "";
+    const id = crypto.randomUUID();
+    setQueryWorkspaceTabs((prev) => {
+      const newTab: QueryWorkspaceTab = {
+        id,
+        label: `Query ${prev.length + 1}`,
+        sql,
+        result: null,
+        error: null,
+      };
+      return [...prev, newTab];
+    });
+    setQueryWorkspaceActiveTabId(id);
+  }, []);
+
+  const renameQueryWorkspaceTab = useCallback((id: string, label: string) => {
+    setQueryWorkspaceTabs((prev) => {
+      const idx = prev.findIndex((t) => t.id === id);
+      const fallback = idx >= 0 ? `Query ${idx + 1}` : "Query";
+      const nextLabel = label.trim() || fallback;
+      return prev.map((t) =>
+        t.id === id ? { ...t, label: nextLabel } : t,
+      );
+    });
+  }, []);
+
+  const closeQueryWorkspaceTab = useCallback((id: string) => {
+    const prev = queryWorkspaceTabsRef.current;
+    const active = queryWorkspaceActiveTabIdRef.current;
+    if (prev.length <= 1) return;
+    const idx = prev.findIndex((t) => t.id === id);
+    const filtered = prev.filter((t) => t.id !== id);
+    let nextActive = active;
+    if (active === id) {
+      const neighbor = prev[idx - 1] ?? prev[idx + 1];
+      nextActive = neighbor?.id ?? filtered[0]!.id;
+    }
+    setQueryWorkspaceTabs(filtered);
+    setQueryWorkspaceActiveTabId(nextActive);
+  }, []);
 
   const applyQueryAndReload = useCallback(async () => {
     const conn = connRef.current;
@@ -641,9 +737,9 @@ export function CsvViewer() {
     setStatus("loading");
     try {
       setQueryWorkspaceOpen(false);
-      setQueryWorkspaceSql("");
-      setQueryWorkspaceResult(null);
-      setQueryWorkspaceError(null);
+      setQueryWorkspaceTabs([]);
+      setQueryWorkspaceActiveTabId(null);
+      setQueryWorkspaceRunningTabId(null);
       dataTableNameRef.current = null;
       setDataTableName(null);
       await connRef.current?.close().catch(() => {});
@@ -671,7 +767,15 @@ export function CsvViewer() {
       const tableQuoted = quoteIdent(tableId);
       dataTableNameRef.current = tableId;
       setDataTableName(tableId);
-      setQueryWorkspaceSql(`SELECT * FROM ${tableQuoted}`);
+      const initialTab: QueryWorkspaceTab = {
+        id: crypto.randomUUID(),
+        label: "Query 1",
+        sql: `SELECT * FROM ${tableQuoted}`,
+        result: null,
+        error: null,
+      };
+      setQueryWorkspaceTabs([initialTab]);
+      setQueryWorkspaceActiveTabId(initialTab.id);
 
       await conn.query(`
         CREATE OR REPLACE TABLE ${tableQuoted} AS
@@ -939,11 +1043,14 @@ export function CsvViewer() {
         onOpenChange={setQueryWorkspaceOpen}
         tableIdentifier={dataTableName}
         columnMeta={columnMeta}
-        sql={queryWorkspaceSql}
-        onSqlChange={setQueryWorkspaceSql}
-        result={queryWorkspaceResult}
-        error={queryWorkspaceError}
-        running={queryWorkspaceRunning}
+        tabs={queryWorkspaceTabs}
+        activeTabId={queryWorkspaceActiveTabId}
+        onActiveTabChange={setQueryWorkspaceActiveTabId}
+        onSqlChange={handleQueryWorkspaceSqlChange}
+        onAddTab={addQueryWorkspaceTab}
+        onCloseTab={closeQueryWorkspaceTab}
+        onTabLabelChange={renameQueryWorkspaceTab}
+        runningTabId={queryWorkspaceRunningTabId}
         onRun={runQueryWorkspace}
         queryDataDisabled={status !== "ready"}
       />
