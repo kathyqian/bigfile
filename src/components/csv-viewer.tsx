@@ -891,8 +891,8 @@ export function CsvViewer() {
           ) : null}
 
           {status === "idle" ? (
-            <div className="flex min-h-0 flex-1 items-center justify-center">
-              <div className="max-h-[min(360px,50vh)] w-full max-w-md overflow-y-auto">
+            <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto">
+              <div className="w-full max-w-md shrink-0">
                 <Empty className="border-border border border-dashed">
                   <EmptyHeader>
                     <EmptyMedia variant="icon">
@@ -913,8 +913,8 @@ export function CsvViewer() {
           ) : null}
 
           {status === "loading" ? (
-            <div className="flex min-h-0 flex-1 items-center justify-center">
-              <div className="max-h-[min(360px,50vh)] w-full max-w-md overflow-y-auto">
+            <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto">
+              <div className="w-full max-w-md shrink-0">
                 <Empty className="border-border border border-dashed">
                   <EmptyHeader>
                     <EmptyTitle>Loading CSV…</EmptyTitle>
