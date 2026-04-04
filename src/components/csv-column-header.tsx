@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown, ListFilter } from "lucide-react";
 
 import { NumericFilterPopoverBody } from "@/components/csv-filters/numeric-filter-popover";
@@ -18,26 +18,10 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import type { ColumnFilterMode } from "@/lib/column-type-meta";
-import type {
-  ColumnFilter,
-  NumericColumnFilter,
-  SortColumn,
-  TextColumnFilter,
-} from "@/lib/csv-query";
+import type { ColumnFilter, SortColumn } from "@/lib/csv-query";
 import { ColumnHistogramMini } from "@/components/column-histogram-mini";
 import type { ColumnHistogramData } from "@/lib/column-histogram";
 import { cn } from "@/lib/utils";
-
-function numericFilterKey(f: NumericColumnFilter | undefined): string {
-  if (!f || f.kind !== "numeric") return "none";
-  if (f.mode === "between") return `b:${f.min ?? ""}:${f.max ?? ""}`;
-  return `c:${f.op}:${f.value}`;
-}
-
-function textFilterKey(f: TextColumnFilter | undefined): string {
-  if (!f || f.kind !== "text") return "none";
-  return `t:${f.includeNull}:${[...f.values].sort().join("\x01")}`;
-}
 
 type Props = {
   columnKey: string;
@@ -100,8 +84,17 @@ export function CsvColumnHeader({
   loadDistinct,
   loadHistogramForColumn,
 }: Props) {
+  const [filterPopoverOpen, setFilterPopoverOpen] = useState(false);
   const [histogram, setHistogram] = useState<ColumnHistogramData | null>(null);
   const [histogramLoading, setHistogramLoading] = useState(true);
+
+  const applyFilterAndClose = useCallback(
+    (f: ColumnFilter | null) => {
+      onFilterApply(f);
+      setFilterPopoverOpen(false);
+    },
+    [onFilterApply],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -181,7 +174,7 @@ export function CsvColumnHeader({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <Popover>
+          <Popover open={filterPopoverOpen} onOpenChange={setFilterPopoverOpen}>
             <PopoverTrigger
               className={cn(
                 "inline-flex size-7 shrink-0 items-center justify-center rounded-lg border border-transparent outline-none select-none hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
@@ -212,16 +205,16 @@ export function CsvColumnHeader({
             <PopoverContent align="end" className="w-auto p-3">
               {filterMode === "numeric" ? (
                 <NumericFilterPopoverBody
-                  key={`${columnKey}-${numericFilterKey(initialNumeric)}`}
+                  key={columnKey}
                   initial={initialNumeric}
-                  onApply={onFilterApply}
+                  onApply={applyFilterAndClose}
                 />
               ) : (
                 <TextFilterPopoverBody
-                  key={`${columnKey}-${textFilterKey(initialText)}`}
+                  key={columnKey}
                   columnKey={columnKey}
                   initial={initialText}
-                  onApply={onFilterApply}
+                  onApply={applyFilterAndClose}
                   loadDistinct={loadDistinct}
                 />
               )}

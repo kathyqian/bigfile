@@ -21,6 +21,11 @@ type Props = {
   loadDistinct: () => Promise<{ values: (string | null)[]; truncated: boolean }>;
 };
 
+function textFilterSignature(f: TextColumnFilter | undefined): string {
+  if (!f || f.kind !== "text") return "none";
+  return `t:${f.includeNull}:${[...f.values].sort().join("\x01")}`;
+}
+
 function labelForValue(v: string | null): string {
   if (v === null) return "(null)";
   if (v === "") return "(blank)";
@@ -41,6 +46,13 @@ export function TextFilterPopoverBody({
   const [selStrings, setSelStrings] = useState<Set<string>>(
     () => new Set(initial?.values ?? []),
   );
+
+  const initialSig = useMemo(() => textFilterSignature(initial), [initial]);
+
+  useEffect(() => {
+    setSelNull(initial?.includeNull ?? false);
+    setSelStrings(new Set(initial?.values ?? []));
+  }, [initialSig]);
 
   const reload = useCallback(async () => {
     setLoading(true);

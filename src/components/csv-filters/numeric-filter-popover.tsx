@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,12 @@ import type {
 } from "@/lib/csv-query";
 
 const OPS: NumericCompareOp[] = ["=", "!=", "<", "<=", ">", ">="];
+
+function numericFilterSignature(f: NumericColumnFilter | undefined): string {
+  if (!f || f.kind !== "numeric") return "none";
+  if (f.mode === "between") return `b:${f.min ?? ""}:${f.max ?? ""}`;
+  return `c:${f.op}:${f.value}`;
+}
 
 type Props = {
   initial: NumericColumnFilter | undefined;
@@ -46,6 +52,29 @@ export function NumericFilterPopoverBody({ initial, onApply }: Props) {
       ? initial.value?.toString() ?? ""
       : "",
   );
+
+  const initialSig = useMemo(() => numericFilterSignature(initial), [initial]);
+
+  useEffect(() => {
+    const i = initial;
+    setMode(i?.kind === "numeric" && i.mode === "cmp" ? "cmp" : "between");
+    setMinV(
+      i?.kind === "numeric" && i.mode === "between"
+        ? i.min?.toString() ?? ""
+        : "",
+    );
+    setMaxV(
+      i?.kind === "numeric" && i.mode === "between"
+        ? i.max?.toString() ?? ""
+        : "",
+    );
+    setOp(i?.kind === "numeric" && i.mode === "cmp" ? i.op : "=");
+    setCmpV(
+      i?.kind === "numeric" && i.mode === "cmp"
+        ? i.value?.toString() ?? ""
+        : "",
+    );
+  }, [initialSig]);
 
   function parseNum(s: string): number | undefined {
     const t = s.trim();
