@@ -161,7 +161,7 @@ export function CsvViewer() {
 
   const [status, setStatus] = useState<
     "idle" | "init-db" | "loading" | "ready" | "error"
-  >("idle");
+  >("init-db");
   const [error, setError] = useState<string | null>(null);
   const [fileLabel, setFileLabel] = useState<string | null>(null);
   const [dataTableName, setDataTableName] = useState<string | null>(null);
@@ -197,7 +197,6 @@ export function CsvViewer() {
     let cancelled = false;
     void (async () => {
       try {
-        setStatus("init-db");
         const handle = await createDuckDB();
         if (cancelled) {
           await handle.terminate();
