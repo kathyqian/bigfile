@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -21,6 +22,13 @@ import { Separator } from "@/components/ui/separator";
 import { quoteIdent } from "@/lib/csv-query";
 import { QUERY_RESULT_ROW_LIMIT } from "@/lib/sql-guardrails";
 import { cn } from "@/lib/utils";
+
+import {
+  SqlQueryResultsChart,
+  defaultQueryChartConfig,
+  type QueryChartConfig,
+} from "@/components/sql-query-results-chart";
+import { normalizeYAggregate } from "@/lib/chart-series";
 
 export type QueryResultState = {
   columns: string[];
@@ -81,12 +89,22 @@ export function SqlQueryWorkspace({
   const skipBlurCommitRef = useRef(false);
   const [editingTabId, setEditingTabId] = useState<string | null>(null);
   const [draftLabel, setDraftLabel] = useState("");
+  /** Per query tab: Table vs Chart in the results pane. */
+  const [resultsViewByTabId, setResultsViewByTabId] = useState<
+    Record<string, "table" | "chart">
+  >({});
+  /** Per query tab: chart type and column selections (persist when toggling Table/Chart). */
+  const [chartConfigByTabId, setChartConfigByTabId] = useState<
+    Record<string, QueryChartConfig>
+  >({});
 
   useEffect(() => {
     if (!open) {
       skipBlurCommitRef.current = false;
-      setEditingTabId(null);
-      setDraftLabel("");
+      queueMicrotask(() => {
+        setEditingTabId(null);
+        setDraftLabel("");
+      });
     }
   }, [open]);
 
@@ -126,6 +144,48 @@ export function SqlQueryWorkspace({
   const error = activeTab?.error ?? null;
   const running =
     activeTabId != null && runningTabId === activeTabId;
+
+  const resultsView: "table" | "chart" =
+    activeTabId != null && resultsViewByTabId[activeTabId] === "chart"
+      ? "chart"
+      : "table";
+
+  const chartConfig: QueryChartConfig = useMemo(() => {
+    if (activeTabId == null) return defaultQueryChartConfig();
+    const raw: QueryChartConfig = {
+      ...defaultQueryChartConfig(),
+      ...(chartConfigByTabId[activeTabId] ?? {}),
+    };
+    if (result == null) {
+      return { ...raw, yAggregate: normalizeYAggregate(raw.yAggregate) };
+    }
+    const cols = new Set(result.columns);
+    return {
+      ...raw,
+      yAggregate: normalizeYAggregate(raw.yAggregate),
+      xColumn: raw.xColumn && cols.has(raw.xColumn) ? raw.xColumn : null,
+      yColumn: raw.yColumn && cols.has(raw.yColumn) ? raw.yColumn : null,
+      pieLabelColumn:
+        raw.pieLabelColumn && cols.has(raw.pieLabelColumn)
+          ? raw.pieLabelColumn
+          : null,
+      pieValueColumn:
+        raw.pieValueColumn && cols.has(raw.pieValueColumn)
+          ? raw.pieValueColumn
+          : null,
+    };
+  }, [activeTabId, result, chartConfigByTabId]);
+
+  const setResultsView = useCallback(
+    (view: "table" | "chart") => {
+      if (activeTabId == null) return;
+      setResultsViewByTabId((prev) => ({
+        ...prev,
+        [activeTabId]: view,
+      }));
+    },
+    [activeTabId],
+  );
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -343,8 +403,54 @@ export function SqlQueryWorkspace({
                 <Separator className="shrink-0" />
 
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[color-mix(in_oklab,var(--muted)_12%,transparent)]">
-                  <div className="text-muted-foreground flex shrink-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-1 px-3 py-2 text-xs md:px-4">
-                    <span className="font-medium">Results</span>
+                  <div className="text-muted-foreground flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3 py-2 text-xs md:px-4">
+                    <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+                      <span className="text-foreground font-medium">Results</span>
+                      {result && result.rows.length > 0 ? (
+                        <div
+                          className="flex flex-wrap items-center gap-1.5"
+                          role="tablist"
+                          aria-label="Results view"
+                        >
+                          <Button
+                            type="button"
+                            role="tab"
+                            aria-selected={resultsView === "table"}
+                            size="sm"
+                            variant={
+                              resultsView === "table" ? "default" : "outline"
+                            }
+                            className={cn(
+                              "h-7 rounded-full px-3 text-xs font-medium",
+                              resultsView === "table"
+                                ? ""
+                                : "border-border bg-background",
+                            )}
+                            onClick={() => setResultsView("table")}
+                          >
+                            Table
+                          </Button>
+                          <Button
+                            type="button"
+                            role="tab"
+                            aria-selected={resultsView === "chart"}
+                            size="sm"
+                            variant={
+                              resultsView === "chart" ? "default" : "outline"
+                            }
+                            className={cn(
+                              "h-7 rounded-full px-3 text-xs font-medium",
+                              resultsView === "chart"
+                                ? ""
+                                : "border-border bg-background",
+                            )}
+                            onClick={() => setResultsView("chart")}
+                          >
+                            Chart
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
                     <span className="max-w-full font-normal wrap-break-word sm:max-w-[min(100%,28rem)] sm:text-right">
                       Read-only; max {QUERY_RESULT_ROW_LIMIT.toLocaleString()} rows
                       for SELECT and WITH.
@@ -358,7 +464,7 @@ export function SqlQueryWorkspace({
                       {error}
                     </div>
                   ) : null}
-                  <div className="min-h-0 flex-1 overflow-hidden px-0 pb-3 md:pb-4">
+                  <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-0 pb-3 md:pb-4">
                     {running ? (
                       <p
                         className="text-muted-foreground border-border/60 bg-muted/40 border-b px-4 py-2 text-xs"
@@ -377,7 +483,7 @@ export function SqlQueryWorkspace({
                         No rows returned.
                       </p>
                     ) : null}
-                    {result && result.rows.length > 0 ? (
+                    {result && result.rows.length > 0 && resultsView === "table" ? (
                       <ScrollArea className="h-full min-h-0">
                         <div className="inline-block min-w-full align-middle">
                           <table className="w-full min-w-[640px] border-collapse text-left text-sm">
@@ -415,6 +521,28 @@ export function SqlQueryWorkspace({
                           </table>
                         </div>
                       </ScrollArea>
+                    ) : null}
+                    {result &&
+                    result.rows.length > 0 &&
+                    resultsView === "chart" &&
+                    activeTabId != null ? (
+                      <div className="h-full min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
+                        <SqlQueryResultsChart
+                          columns={result.columns}
+                          rows={result.rows}
+                          config={chartConfig}
+                          onConfigChange={(next) => {
+                            setChartConfigByTabId((prev) => ({
+                              ...prev,
+                              [activeTabId]: {
+                                ...defaultQueryChartConfig(),
+                                ...next,
+                                yAggregate: normalizeYAggregate(next.yAggregate),
+                              },
+                            }));
+                          }}
+                        />
+                      </div>
                     ) : null}
                   </div>
                 </div>
