@@ -138,7 +138,13 @@
   --rdg-border-color: var(--border);
   --rdg-summary-border-color: var(--border);
   --rdg-color: var(--foreground);
+  /* Default RDG shadow on the last frozen column — use border only (see .rdg-cell) */
+  --rdg-cell-frozen-box-shadow: none;
   font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+.rdg-wrap .rdg-theme:dir(rtl) {
+  --rdg-cell-frozen-box-shadow: none;
 }
 
 /* RDG root defaults to border: 1px on all sides — drops a second line next to
@@ -166,6 +172,12 @@
 .dark .rdg-wrap .rdg-theme {
   --rdg-background-color: var(--background);
   --rdg-header-background-color: var(--muted);
+}
+
+/* Column letter row (grouped header tier) — reads like a spreadsheet row under letters */
+.rdg-wrap .rdg-col-letter-header {
+  background-color: var(--background);
+  border-block-end: 1px solid var(--border);
 }
 
 @keyframes loading-bar-slide {

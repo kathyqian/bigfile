@@ -42,7 +42,7 @@ export function AppFooter({
         className,
       )}
     >
-      <span className="min-w-0">
+      <div className="min-w-0">
         {loadError ? (
           "Load failed — see message above"
         ) : importing ? (
@@ -133,7 +133,7 @@ export function AppFooter({
             {windowLoading ? " · fetching…" : ""}
           </>
         ) : null}
-      </span>
+      </div>
     </footer>
   );
 }

@@ -1,9 +1,23 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type * as duckdb from "@duckdb/duckdb-wasm";
 import type { Table as ArrowTable } from "apache-arrow";
-import { DataGrid, type Column, type DataGridHandle } from "react-data-grid";
+import {
+  DataGrid,
+  type Column,
+  type ColumnOrColumnGroup,
+  type DataGridHandle,
+  type RenderCellProps,
+  type RenderHeaderCellProps,
+} from "react-data-grid";
 import "react-data-grid/lib/styles.css";
 import { FileSpreadsheet } from "lucide-react";
 
@@ -51,8 +65,23 @@ import { cn } from "@/lib/utils";
 
 const TABLE_NAME = "csv_data";
 const REGISTERED_NAME = "upload.csv";
+/** Grid-only; avoids colliding with a CSV column named "row" or similar. */
+const ROW_NUM_KEY = "__rdg_rn__";
 const ROW_HEIGHT = 35;
-const HEADER_ROW_HEIGHT = 56;
+/** Shared styles for column letters (A, B, …) and row index gutter (1, 2, …). */
+const GUTTER_LABEL_CLASS =
+  "font-normal font-mono tabular-nums text-xs text-muted-foreground";
+/** Tier with column names, filters, and type label. */
+const HEADER_MAIN_ROW_HEIGHT = 52;
+/** Column letters row — same pixel height as body rows ({@link ROW_HEIGHT}). Patched via {@link patchRdgHeaderLetterRow}. */
+const HEADER_LETTER_ROW_HEIGHT = ROW_HEIGHT;
+/**
+ * react-data-grid only supports one `headerRowHeight` for every header tier. We pass the
+ * average so 2 × this ≈ letter + main, then patch the first two grid tracks after layout.
+ */
+const HEADER_ROW_UNIFORM_HEIGHT = Math.round(
+  (HEADER_LETTER_ROW_HEIGHT + HEADER_MAIN_ROW_HEIGHT) / 2,
+);
 const SCROLL_OVERSCAN_ROWS = 80;
 const FETCH_CHUNK_ROWS = 8000;
 /** Fetch up to N+1 rows to detect truncation */
@@ -62,6 +91,43 @@ export type GridRow = { __idx: number; __loaded?: boolean } & Record<
   string,
   unknown
 >;
+
+/** Narrow letter row + full main row; fixes uniform header height from RDG. */
+function patchRdgHeaderLetterRow(
+  root: HTMLDivElement,
+  letterPx: number,
+  mainPx: number,
+  uniformPx: number,
+) {
+  const gtr = root.style.gridTemplateRows;
+  if (!gtr) return;
+  const repeatRe = new RegExp(
+    `^repeat\\(\\s*2\\s*,\\s*${uniformPx}px\\s*\\)`,
+  );
+  const pairRe = new RegExp(`^${uniformPx}px\\s+${uniformPx}px(?=\\s|$)`);
+  let next = gtr;
+  if (repeatRe.test(gtr)) {
+    next = gtr.replace(repeatRe, `${letterPx}px ${mainPx}px`);
+  } else if (pairRe.test(gtr)) {
+    next = gtr.replace(pairRe, `${letterPx}px ${mainPx}px`);
+  }
+  if (next !== gtr) {
+    root.style.gridTemplateRows = next;
+  }
+  root.style.setProperty("--rdg-header-row-height", `${letterPx}px`);
+}
+
+/** 0-based column index → Excel-style letters (A … Z, AA …). */
+function excelColumnLabel(zeroBasedIndex: number): string {
+  let n = zeroBasedIndex + 1;
+  let s = "";
+  while (n > 0) {
+    n--;
+    s = String.fromCharCode(65 + (n % 26)) + s;
+    n = Math.floor(n / 26);
+  }
+  return s;
+}
 
 function arrowTableToObjects(table: ArrowTable): Record<string, unknown>[] {
   const out: Record<string, unknown>[] = [];
@@ -183,6 +249,27 @@ export function CsvViewer() {
       if (el) el.removeEventListener("scroll", updateGridScrollable);
     };
   }, [status, totalRows, updateGridScrollable]);
+
+  useLayoutEffect(() => {
+    if (status !== "ready") return;
+    const id = requestAnimationFrame(() => {
+      const root = gridRef.current?.element;
+      if (!root) return;
+      patchRdgHeaderLetterRow(
+        root,
+        HEADER_LETTER_ROW_HEIGHT,
+        HEADER_MAIN_ROW_HEIGHT,
+        HEADER_ROW_UNIFORM_HEIGHT,
+      );
+      updateGridScrollable();
+    });
+    return () => cancelAnimationFrame(id);
+  }, [
+    status,
+    totalRows,
+    columnNames.length,
+    updateGridScrollable,
+  ]);
 
   const columnMetaMap = useMemo(
     () => new Map(columnMeta.map((m) => [m.name, m])),
@@ -341,50 +428,108 @@ export function CsvViewer() {
     void applyQueryAndReload();
   }, [applyQueryAndReload]);
 
-  const columns: readonly Column<GridRow>[] = useMemo(() => {
+  const columns: readonly ColumnOrColumnGroup<GridRow>[] = useMemo(() => {
     const metaByName = columnMetaMap;
-    return columnNames.map((name) => ({
-      key: name,
-      name,
-      resizable: true,
-      sortable: false,
-      editable: false,
-      renderHeaderCell(p) {
-        const meta = metaByName.get(name);
-        if (!meta) {
-          return (
-            <span className="truncate px-1 font-medium" title={name}>
-              {name}
+
+    /** Group so the corner matches data columns: blank tier (letters row), then row index tier. */
+    const rowNumberColumnGroup: ColumnOrColumnGroup<GridRow> = {
+      name: <span className="block h-full min-h-0 w-full" aria-hidden />,
+      headerCellClass: "rdg-col-letter-header",
+      children: [
+        {
+          key: ROW_NUM_KEY,
+          name: "",
+          width: 52,
+          minWidth: 44,
+          maxWidth: 88,
+          resizable: false,
+          frozen: true,
+          draggable: false,
+          sortable: false,
+          renderHeaderCell() {
+            return <span className="sr-only">Row numbers</span>;
+          },
+          renderCell({ row }) {
+            return (
+              <span
+                className={`${GUTTER_LABEL_CLASS} block w-full pr-1.5 text-right`}
+                title={`Row ${row.__idx + 1}`}
+              >
+                {row.__idx + 1}
+              </span>
+            );
+          },
+        },
+      ],
+    };
+
+    const dataColumns: ColumnOrColumnGroup<GridRow>[] = columnNames.map(
+      (name, colIndex) => {
+        const letter = excelColumnLabel(colIndex);
+        const leafColumn: Column<GridRow> = {
+          key: name,
+          name,
+          resizable: true,
+          sortable: false,
+          editable: false,
+          renderHeaderCell(p: RenderHeaderCellProps<GridRow>) {
+            const meta = metaByName.get(name);
+            if (!meta) {
+              return (
+                <div className="flex h-full min-w-0 items-center py-0.5 pr-1">
+                  <span
+                    className="min-w-0 flex-1 truncate font-bold"
+                    title={name}
+                  >
+                    {name}
+                  </span>
+                </div>
+              );
+            }
+            return (
+              <CsvColumnHeader
+                columnKey={name}
+                displayName={name}
+                typeLabel={meta.typeLabel}
+                filterMode={meta.filterMode}
+                sortColumns={sortColumns}
+                tabIndex={p.tabIndex}
+                filter={filters[name]}
+                onSortAsc={() => handleSortAsc(name)}
+                onSortDesc={() => handleSortDesc(name)}
+                onSortClear={() => handleSortClear(name)}
+                onFilterApply={(f) => handleFilterApply(name, f)}
+                loadDistinct={() => loadDistinctForColumn(name)}
+              />
+            );
+          },
+          renderCell({ row, column }: RenderCellProps<GridRow>) {
+            if (!row.__loaded) {
+              return <span className="text-muted-foreground text-xs">…</span>;
+            }
+            const v = (row as Record<string, unknown>)[column.key];
+            if (v === null || v === undefined) return "";
+            if (typeof v === "object") return JSON.stringify(v);
+            return String(v);
+          },
+        };
+
+        return {
+          name: (
+            <span
+              className={`${GUTTER_LABEL_CLASS} flex h-full w-full select-none items-center justify-center leading-none`}
+              title={`Column ${letter}`}
+            >
+              {letter}
             </span>
-          );
-        }
-        return (
-          <CsvColumnHeader
-            columnKey={name}
-            displayName={name}
-            typeLabel={meta.typeLabel}
-            filterMode={meta.filterMode}
-            sortColumns={sortColumns}
-            tabIndex={p.tabIndex}
-            filter={filters[name]}
-            onSortAsc={() => handleSortAsc(name)}
-            onSortDesc={() => handleSortDesc(name)}
-            onSortClear={() => handleSortClear(name)}
-            onFilterApply={(f) => handleFilterApply(name, f)}
-            loadDistinct={() => loadDistinctForColumn(name)}
-          />
-        );
+          ),
+          headerCellClass: "rdg-col-letter-header",
+          children: [leafColumn],
+        };
       },
-      renderCell({ row, column }) {
-        if (!row.__loaded) {
-          return <span className="text-muted-foreground text-xs">…</span>;
-        }
-        const v = row[column.key];
-        if (v === null || v === undefined) return "";
-        if (typeof v === "object") return JSON.stringify(v);
-        return String(v);
-      },
-    }));
+    );
+
+    return [rowNumberColumnGroup, ...dataColumns];
   }, [
     columnNames,
     columnMetaMap,
@@ -659,7 +804,7 @@ export function CsvViewer() {
                   sortable: false,
                 }}
                 rowHeight={ROW_HEIGHT}
-                headerRowHeight={HEADER_ROW_HEIGHT}
+                headerRowHeight={HEADER_ROW_UNIFORM_HEIGHT}
                 enableVirtualization
                 onScroll={(e) => {
                   const t = e.currentTarget;

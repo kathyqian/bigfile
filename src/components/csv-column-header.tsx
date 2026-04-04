@@ -115,9 +115,9 @@ export function CsvColumnHeader({
       className="flex h-full min-w-0 flex-col gap-0.5 py-0.5 pr-1"
       tabIndex={tabIndex}
     >
-      <div className="flex min-w-0 items-start justify-between gap-0.5">
+      <div className="flex min-w-0 items-center justify-between gap-1.5">
         <span
-          className="min-w-0 flex-1 truncate font-medium leading-tight"
+          className="min-w-0 flex-1 truncate font-bold leading-tight"
           title={displayName}
         >
           {displayName}
