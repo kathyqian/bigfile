@@ -110,9 +110,7 @@ function patchRdgHeaderLetterRow(
 ) {
   const gtr = root.style.gridTemplateRows;
   if (!gtr) return;
-  const repeatRe = new RegExp(
-    `^repeat\\(\\s*2\\s*,\\s*${uniformPx}px\\s*\\)`,
-  );
+  const repeatRe = new RegExp(`^repeat\\(\\s*2\\s*,\\s*${uniformPx}px\\s*\\)`);
   const pairRe = new RegExp(`^${uniformPx}px\\s+${uniformPx}px(?=\\s|$)`);
   let next = gtr;
   if (repeatRe.test(gtr)) {
@@ -283,12 +281,7 @@ export function CsvViewer() {
       updateGridScrollable();
     });
     return () => cancelAnimationFrame(id);
-  }, [
-    status,
-    totalRows,
-    columnNames.length,
-    updateGridScrollable,
-  ]);
+  }, [status, totalRows, columnNames.length, updateGridScrollable]);
 
   const columnMetaMap = useMemo(
     () => new Map(columnMeta.map((m) => [m.name, m])),
@@ -299,7 +292,8 @@ export function CsvViewer() {
   const loadDistinctForColumn = useCallback(async (columnKey: string) => {
     const conn = connRef.current;
     const tableId = dataTableNameRef.current;
-    if (!conn || !tableId) return { values: [] as (string | null)[], truncated: false };
+    if (!conn || !tableId)
+      return { values: [] as (string | null)[], truncated: false };
     const t = quoteIdent(tableId);
     const where = buildWhereClause(
       filtersRef.current,
@@ -346,7 +340,10 @@ export function CsvViewer() {
       return;
 
     const t = quoteIdent(tableId);
-    const where = buildWhereClause(filtersRef.current, columnMetaMapRef.current);
+    const where = buildWhereClause(
+      filtersRef.current,
+      columnMetaMapRef.current,
+    );
     const orderBy = buildOrderByClause(sortColumnsRef.current);
     const list = cols.map(quoteIdent).join(", ");
 
@@ -467,9 +464,7 @@ export function CsvViewer() {
       const idx = prev.findIndex((t) => t.id === id);
       const fallback = idx >= 0 ? `Query ${idx + 1}` : "Query";
       const nextLabel = label.trim() || fallback;
-      return prev.map((t) =>
-        t.id === id ? { ...t, label: nextLabel } : t,
-      );
+      return prev.map((t) => (t.id === id ? { ...t, label: nextLabel } : t));
     });
   }, []);
 
@@ -495,7 +490,10 @@ export function CsvViewer() {
     if (!conn || !tableId || cols.length === 0) return;
 
     const t = quoteIdent(tableId);
-    const where = buildWhereClause(filtersRef.current, columnMetaMapRef.current);
+    const where = buildWhereClause(
+      filtersRef.current,
+      columnMetaMapRef.current,
+    );
     const countRow = await conn.query(
       `SELECT COUNT(*)::BIGINT AS c FROM ${t} ${where};`,
     );
@@ -549,7 +547,9 @@ export function CsvViewer() {
 
   const handleSortClear = useCallback(
     (columnKey: string) => {
-      const cur = sortColumnsRef.current.filter((s) => s.columnKey !== columnKey);
+      const cur = sortColumnsRef.current.filter(
+        (s) => s.columnKey !== columnKey,
+      );
       sortColumnsRef.current = cur;
       setSortColumns(cur);
       void applyQueryAndReload();
@@ -627,6 +627,7 @@ export function CsvViewer() {
           resizable: true,
           sortable: false,
           editable: false,
+          headerCellClass: `rdg-csv-header-z-${colIndex}`,
           renderHeaderCell(p: RenderHeaderCellProps<GridRow>) {
             const meta = metaByName.get(name);
             if (!meta) {
@@ -698,6 +699,20 @@ export function CsvViewer() {
     loadDistinctForColumn,
     loadHistogramForColumn,
   ]);
+
+  /** Left headers stack above right ones so column resize handles can straddle the shared border. */
+  const headerResizeStackCss = useMemo(() => {
+    if (columnNames.length === 0) return "";
+    const n = columnNames.length;
+    return columnNames
+      .map(
+        (_, colIndex) =>
+          `.rdg-wrap .rdg-header-row .rdg-csv-header-z-${colIndex}{z-index:${
+            10000 + n - colIndex
+          }}`,
+      )
+      .join("");
+  }, [columnNames]);
 
   const scheduleRangeLoad = useCallback(
     (scrollTop: number, clientHeight: number) => {
@@ -969,6 +984,9 @@ export function CsvViewer() {
                 gridScrollable && "rdg-scrollable",
               )}
             >
+              {headerResizeStackCss ? (
+                <style>{headerResizeStackCss}</style>
+              ) : null}
               <DataGrid
                 ref={gridRef}
                 className="rdg-theme rdg-fill-grid min-h-0 min-w-0 flex-1"
@@ -1025,8 +1043,8 @@ export function CsvViewer() {
           <DialogHeader>
             <DialogTitle>Active filters</DialogTitle>
             <DialogDescription>
-              Only rows that match all of the following conditions are shown
-              in the grid.
+              Only rows that match all of the following conditions are shown in
+              the grid.
             </DialogDescription>
           </DialogHeader>
           <ul className="max-h-[min(60vh,22rem)] list-none space-y-3 overflow-y-auto pr-1">
@@ -1074,21 +1092,18 @@ export function CsvViewer() {
             </DialogDescription>
           </DialogHeader>
           <ol className="max-h-[min(60vh,22rem)] list-decimal space-y-3 overflow-y-auto pl-5 pr-1 text-sm">
-            {sortDetailLines.map(
-              ({ priority, columnKey, direction }) => (
-                <li
-                  key={`${columnKey}-${priority}`}
-                  className="border-border border-b pb-3 marker:font-medium last:border-b-0 last:pb-0"
-                >
-                  <span className="text-foreground font-medium">{columnKey}</span>
-                  <span className="text-muted-foreground">
-                    {" "}
-                    —{" "}
-                    {direction === "ASC" ? "Ascending" : "Descending"}
-                  </span>
-                </li>
-              ),
-            )}
+            {sortDetailLines.map(({ priority, columnKey, direction }) => (
+              <li
+                key={`${columnKey}-${priority}`}
+                className="border-border border-b pb-3 marker:font-medium last:border-b-0 last:pb-0"
+              >
+                <span className="text-foreground font-medium">{columnKey}</span>
+                <span className="text-muted-foreground">
+                  {" "}
+                  — {direction === "ASC" ? "Ascending" : "Descending"}
+                </span>
+              </li>
+            ))}
           </ol>
           <DialogFooter className="mt-2">
             <Button type="button" variant="outline" onClick={clearAllSorting}>

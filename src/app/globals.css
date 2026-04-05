@@ -140,6 +140,8 @@
   --rdg-color: var(--foreground);
   /* Default RDG shadow on the last frozen column — use border only (see .rdg-cell) */
   --rdg-cell-frozen-box-shadow: none;
+  /* Match shadcn ResizableHandle ::after (`w-1` = 0.25rem), centered on the separator */
+  --rdg-resize-hit-width: 0.25rem;
   font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
@@ -155,6 +157,31 @@
 
 .rdg-wrap .rdg-cell {
   border-inline-end: 1px solid var(--border);
+}
+
+/*
+ * Column resize: same hit width as shadcn ResizableHandle (1px line + ::after w-1).
+ * Centered on the border between columns; csv-viewer assigns descending z-index on
+ * data headers so the left column’s handle receives events in the overlap (see
+ * headerResizeStackCss).
+ */
+.rdg-wrap .rdg-resize-handle {
+  cursor: ew-resize;
+  z-index: 1;
+  inset-inline-end: calc(
+    (var(--rdg-resize-hit-width) + var(--rdg-border-width, 1px)) / -2
+  );
+  inline-size: var(--rdg-resize-hit-width);
+}
+
+.rdg-wrap .rdg-header-row .rdg-cell:has(.rdg-resize-handle) {
+  overflow-clip-margin: 4px;
+}
+
+@supports not (overflow-clip-margin: 0px) {
+  .rdg-wrap .rdg-header-row .rdg-cell:has(.rdg-resize-handle) {
+    overflow: visible;
+  }
 }
 
 /*
