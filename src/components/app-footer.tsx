@@ -44,12 +44,17 @@ export function AppFooter({
   return (
     <footer
       className={cn(
-        "border-border bg-background text-muted-foreground shrink-0 border-t px-4 py-2.5 text-sm md:px-6",
+        "border-border bg-background text-muted-foreground shrink-0 border-t text-sm",
         className,
       )}
     >
       <div className="flex w-full min-w-0 items-center justify-between gap-4">
-        <div className="min-w-0 flex-1">
+        <div
+          className={cn(
+            "min-w-0 flex-1 py-2.5 pl-3 md:pl-4",
+            !onQueryDataClick && "pr-3 md:pr-4",
+          )}
+        >
         {loadError ? (
           "Load failed — see message above"
         ) : importing ? (
@@ -141,16 +146,18 @@ export function AppFooter({
         ) : null}
         </div>
         {onQueryDataClick ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="shrink-0"
-            disabled={queryDataDisabled}
-            onClick={onQueryDataClick}
-          >
-            Query Data
-          </Button>
+          <div className="flex shrink-0 items-center pt-2.5 pr-2.5 pb-2.5">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+              disabled={queryDataDisabled}
+              onClick={onQueryDataClick}
+            >
+              Query Data
+            </Button>
+          </div>
         ) : null}
       </div>
     </footer>

@@ -22,7 +22,7 @@ export function AppTopBar({
   return (
     <header
       className={cn(
-        "border-border bg-background flex shrink-0 items-center justify-between gap-4 border-b px-4 py-3 md:px-6",
+        "border-border bg-background flex shrink-0 items-center justify-between gap-4 border-b px-3 py-3 md:px-4",
         className,
       )}
     >
