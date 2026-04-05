@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { Play, Plus, X } from "lucide-react";
 
@@ -18,7 +19,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable";
 import { quoteIdent } from "@/lib/csv-query";
 import { QUERY_RESULT_ROW_LIMIT } from "@/lib/sql-guardrails";
 import { cn } from "@/lib/utils";
@@ -68,6 +73,22 @@ function formatCell(v: unknown): string {
   return String(v);
 }
 
+const MD_MIN_WIDTH_QUERY = "(min-width: 768px)";
+
+function subscribeMdMinWidth(onChange: () => void) {
+  const mq = window.matchMedia(MD_MIN_WIDTH_QUERY);
+  mq.addEventListener("change", onChange);
+  return () => mq.removeEventListener("change", onChange);
+}
+
+function getMdMinWidthSnapshot() {
+  return window.matchMedia(MD_MIN_WIDTH_QUERY).matches;
+}
+
+function useMinWidthMd() {
+  return useSyncExternalStore(subscribeMdMinWidth, getMdMinWidthSnapshot, () => true);
+}
+
 export function SqlQueryWorkspace({
   open,
   onOpenChange,
@@ -84,6 +105,7 @@ export function SqlQueryWorkspace({
   onRun,
   queryDataDisabled,
 }: SqlQueryWorkspaceProps) {
+  const isMd = useMinWidthMd();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const skipBlurCommitRef = useRef(false);
@@ -221,28 +243,49 @@ export function SqlQueryWorkspace({
             </DialogTitle>
           </header>
 
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col md:flex-row">
-            <aside className="border-border bg-muted/20 flex w-full shrink-0 flex-col border-b md:w-52 md:shrink-0 md:border-r md:border-b-0">
-              <ScrollArea className="min-h-[120px] flex-1 md:max-h-none">
-                <ul className="space-y-2.5 px-4 py-3 pb-4">
-                  {columnMeta.map((c) => (
-                    <li key={c.name}>
-                      <p
-                        className="text-foreground font-mono text-xs leading-snug break-all"
-                        title={c.name}
-                      >
-                        {c.name}
-                      </p>
-                      <p className="text-muted-foreground font-mono text-[0.65rem] leading-snug">
-                        {c.duckdbType}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              </ScrollArea>
-            </aside>
+          <ResizablePanelGroup
+            key={isMd ? "sql-outer-md" : "sql-outer-sm"}
+            orientation={isMd ? "horizontal" : "vertical"}
+            className="min-h-0 min-w-0 flex-1"
+          >
+            <ResizablePanel
+              id="sql-sidebar"
+              defaultSize={isMd ? "18%" : "28%"}
+              minSize={isMd ? "12%" : "16%"}
+              maxSize="50%"
+              className="min-h-0 min-w-0"
+            >
+              <aside className="bg-muted/20 flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
+                <ScrollArea
+                  className={cn("min-h-[120px] flex-1", isMd && "min-h-0")}
+                >
+                  <ul className="space-y-2.5 px-4 py-3 pb-4">
+                    {columnMeta.map((c) => (
+                      <li key={c.name}>
+                        <p
+                          className="text-foreground font-mono text-xs leading-snug break-all"
+                          title={c.name}
+                        >
+                          {c.name}
+                        </p>
+                        <p className="text-muted-foreground font-mono text-[0.65rem] leading-snug">
+                          {c.duckdbType}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </ScrollArea>
+              </aside>
+            </ResizablePanel>
 
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <ResizableHandle className="shrink-0" />
+
+            <ResizablePanel
+              id="sql-main"
+              minSize="35%"
+              className="min-h-0 min-w-0"
+            >
+              <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
               <div
                 className="bg-muted/80 dark:bg-muted/50 flex min-h-0 shrink-0 items-center gap-0 overflow-x-auto p-0"
                 role="tablist"
@@ -347,62 +390,78 @@ export function SqlQueryWorkspace({
               </div>
 
               <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-t-0">
-                <div className="bg-muted/15 flex min-h-0 flex-1 flex-col border-t-0 p-3 md:p-4">
-                  <div className="mb-2 flex min-w-0 shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2">
-                    <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
-                      <label
-                        htmlFor={editorId}
-                        className="text-muted-foreground shrink-0 text-xs font-medium"
-                      >
-                        Editor
-                      </label>
-                      <span className="text-muted-foreground max-w-full text-xs font-normal wrap-break-word">
-                        Read-only; max {QUERY_RESULT_ROW_LIMIT.toLocaleString()} rows
-                        for SELECT and WITH.
-                      </span>
+                <ResizablePanelGroup
+                  orientation="vertical"
+                  className="min-h-0 flex-1"
+                >
+                  <ResizablePanel
+                    id="sql-editor"
+                    defaultSize="48%"
+                    minSize="22%"
+                    className="min-h-0"
+                  >
+                    <div className="bg-muted/15 flex h-full min-h-0 flex-col border-t-0 p-3 md:p-4">
+                      <div className="mb-2 flex min-w-0 shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2">
+                        <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
+                          <label
+                            htmlFor={editorId}
+                            className="text-muted-foreground shrink-0 text-xs font-medium"
+                          >
+                            Editor
+                          </label>
+                          <span className="text-muted-foreground max-w-full text-xs font-normal wrap-break-word">
+                            Read-only; max {QUERY_RESULT_ROW_LIMIT.toLocaleString()} rows
+                            for SELECT and WITH.
+                          </span>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <span className="text-muted-foreground hidden text-xs sm:inline">
+                            ⌘↵ / Ctrl+Enter
+                          </span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="gap-1.5"
+                            disabled={queryDataDisabled || running}
+                            onClick={() => onRun()}
+                            aria-label="Run query"
+                          >
+                            <Play className="size-3.5 fill-current" />
+                            Run
+                          </Button>
+                        </div>
+                      </div>
+                      <textarea
+                        key={activeTabId ?? "none"}
+                        ref={textareaRef}
+                        id={editorId}
+                        value={sql}
+                        onChange={(e) => onSqlChange(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        spellCheck={false}
+                        className={cn(
+                          "border-input bg-background text-foreground placeholder:text-muted-foreground",
+                          "focus-visible:ring-ring min-h-0 w-full min-w-0 flex-1 resize-none rounded-lg border p-3 font-mono text-sm leading-relaxed",
+                          "focus-visible:ring-[3px] focus-visible:ring-offset-2 focus-visible:outline-none",
+                        )}
+                        placeholder={
+                          tableIdentifier
+                            ? `SELECT * FROM ${quoteIdent(tableIdentifier)}`
+                            : "SELECT …"
+                        }
+                        disabled={queryDataDisabled}
+                      />
                     </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <span className="text-muted-foreground hidden text-xs sm:inline">
-                        ⌘↵ / Ctrl+Enter
-                      </span>
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="gap-1.5"
-                        disabled={queryDataDisabled || running}
-                        onClick={() => onRun()}
-                        aria-label="Run query"
-                      >
-                        <Play className="size-3.5 fill-current" />
-                        Run
-                      </Button>
-                    </div>
-                  </div>
-                  <textarea
-                    key={activeTabId ?? "none"}
-                    ref={textareaRef}
-                    id={editorId}
-                    value={sql}
-                    onChange={(e) => onSqlChange(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    spellCheck={false}
-                    className={cn(
-                      "border-input bg-background text-foreground placeholder:text-muted-foreground",
-                      "focus-visible:ring-ring min-h-0 w-full min-w-0 flex-1 resize-none rounded-lg border p-3 font-mono text-sm leading-relaxed",
-                      "focus-visible:ring-[3px] focus-visible:ring-offset-2 focus-visible:outline-none",
-                    )}
-                    placeholder={
-                      tableIdentifier
-                        ? `SELECT * FROM ${quoteIdent(tableIdentifier)}`
-                        : "SELECT …"
-                    }
-                    disabled={queryDataDisabled}
-                  />
-                </div>
+                  </ResizablePanel>
 
-                <Separator className="shrink-0" />
+                  <ResizableHandle className="shrink-0" />
 
-                <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[color-mix(in_oklab,var(--muted)_12%,transparent)]">
+                  <ResizablePanel
+                    id="sql-results"
+                    minSize="25%"
+                    className="min-h-0"
+                  >
+                    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-[color-mix(in_oklab,var(--muted)_12%,transparent)]">
                   <div className="text-muted-foreground flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3 py-2 text-xs md:px-4">
                     <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
                       <span className="text-foreground font-medium">Results</span>
@@ -545,10 +604,13 @@ export function SqlQueryWorkspace({
                       </div>
                     ) : null}
                   </div>
-                </div>
+                    </div>
+                  </ResizablePanel>
+                </ResizablePanelGroup>
               </div>
             </div>
-          </div>
+            </ResizablePanel>
+          </ResizablePanelGroup>
         </div>
       </DialogContent>
     </Dialog>
