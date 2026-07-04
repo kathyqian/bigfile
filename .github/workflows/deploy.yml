@@ -26,8 +26,6 @@ jobs:
       - name: Install
         run: npm ci
       - name: Build
-        env:
-          NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
         run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:
