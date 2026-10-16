@@ -14,17 +14,19 @@ export function ThemeToggle() {
     setMounted(true);
   }, []);
 
+  if (!mounted) {
+    return <span className="inline-flex size-7 shrink-0" aria-hidden />;
+  }
+
   return (
     <Button
       type="button"
       variant="ghost"
       size="icon-sm"
       aria-label="Toggle theme"
-      disabled={!mounted}
       onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
     >
-      <Sun className="hidden dark:block" />
-      <Moon className="dark:hidden" />
+      {resolvedTheme === "dark" ? <Sun /> : <Moon />}
     </Button>
   );
 }
