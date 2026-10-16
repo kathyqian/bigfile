@@ -24,6 +24,8 @@ import {
   aggregateNumericValues,
   chartLabelText,
   formatChartTick,
+  listNonNumericChartColumns,
+  listNumericChartColumns,
   normalizeYAggregate,
   parseChartNumber,
   type YValueAggregate,
@@ -122,6 +124,13 @@ function ColumnSelect({
   onChange: (v: string | null) => void;
   placeholder: string;
 }) {
+  const items = useMemo(
+    () => [
+      { value: NONE_VALUE, label: placeholder },
+      ...columns.map((c) => ({ value: c, label: c })),
+    ],
+    [columns, placeholder],
+  );
   const v = value ?? NONE_VALUE;
   return (
     <div className="flex min-w-0 flex-col gap-1">
@@ -130,8 +139,10 @@ function ColumnSelect({
       </Label>
       <Select
         value={v}
+        items={items}
+        modal={false}
         onValueChange={(next) =>
-          onChange(next === NONE_VALUE ? null : next)
+          onChange(!next || next === NONE_VALUE ? null : next)
         }
       >
         <SelectTrigger
@@ -581,21 +592,102 @@ export function SqlQueryResultsChart({
   const { kind } = cfg;
   const { ref, width, height } = useSize();
 
+  const numericColumns = useMemo(
+    () => listNumericChartColumns(columns, rows),
+    [columns, rows],
+  );
+  const categoricalColumns = useMemo(
+    () => listNonNumericChartColumns(columns, rows),
+    [columns, rows],
+  );
+
+  const xAxisColumns =
+    kind === "scatter" || kind === "line"
+      ? numericColumns
+      : kind === "bar"
+        ? categoricalColumns
+        : columns;
+  const yAxisColumns =
+    kind === "scatter" || kind === "line" || kind === "bar"
+      ? numericColumns
+      : columns;
+
+  const xColumn =
+    cfg.xColumn != null && xAxisColumns.includes(cfg.xColumn)
+      ? cfg.xColumn
+      : null;
+  const yColumn =
+    cfg.yColumn != null && yAxisColumns.includes(cfg.yColumn)
+      ? cfg.yColumn
+      : null;
+  const pieLabelColumn =
+    cfg.pieLabelColumn != null &&
+    categoricalColumns.includes(cfg.pieLabelColumn)
+      ? cfg.pieLabelColumn
+      : null;
+  const pieValueColumn =
+    cfg.pieValueColumn != null && numericColumns.includes(cfg.pieValueColumn)
+      ? cfg.pieValueColumn
+      : null;
+
   const setKind = (k: QueryChartKind) => {
+    if (k === "scatter" || k === "line") {
+      onConfigChange({
+        ...cfg,
+        kind: k,
+        xColumn:
+          cfg.xColumn != null && numericColumns.includes(cfg.xColumn)
+            ? cfg.xColumn
+            : null,
+        yColumn:
+          cfg.yColumn != null && numericColumns.includes(cfg.yColumn)
+            ? cfg.yColumn
+            : null,
+      });
+      return;
+    }
+    if (k === "bar") {
+      onConfigChange({
+        ...cfg,
+        kind: k,
+        xColumn:
+          cfg.xColumn != null && categoricalColumns.includes(cfg.xColumn)
+            ? cfg.xColumn
+            : null,
+        yColumn:
+          cfg.yColumn != null && numericColumns.includes(cfg.yColumn)
+            ? cfg.yColumn
+            : null,
+      });
+      return;
+    }
+    if (k === "pie") {
+      onConfigChange({
+        ...cfg,
+        kind: k,
+        pieLabelColumn:
+          cfg.pieLabelColumn != null &&
+          categoricalColumns.includes(cfg.pieLabelColumn)
+            ? cfg.pieLabelColumn
+            : null,
+        pieValueColumn:
+          cfg.pieValueColumn != null &&
+          numericColumns.includes(cfg.pieValueColumn)
+            ? cfg.pieValueColumn
+            : null,
+      });
+      return;
+    }
     onConfigChange({ ...cfg, kind: k });
   };
 
   const cartesianReady =
-    cfg.xColumn != null &&
-    cfg.yColumn != null &&
-    columns.includes(cfg.xColumn) &&
-    columns.includes(cfg.yColumn);
+    xColumn != null &&
+    yColumn != null &&
+    columns.includes(xColumn) &&
+    columns.includes(yColumn);
 
-  const pieReady =
-    cfg.pieLabelColumn != null &&
-    cfg.pieValueColumn != null &&
-    columns.includes(cfg.pieLabelColumn) &&
-    columns.includes(cfg.pieValueColumn);
+  const pieReady = pieLabelColumn != null && pieValueColumn != null;
 
   let body: ReactNode = null;
 
@@ -611,8 +703,8 @@ export function SqlQueryResultsChart({
         <PiePlot
           width={Math.max(width, 280)}
           height={Math.max(Math.min(height, 320), 220)}
-          labelCol={cfg.pieLabelColumn!}
-          valueCol={cfg.pieValueColumn!}
+          labelCol={pieLabelColumn!}
+          valueCol={pieValueColumn!}
           yAggregate={cfg.yAggregate}
           rows={rows}
         />
@@ -630,8 +722,8 @@ export function SqlQueryResultsChart({
         width={Math.max(width, 400)}
         height={Math.max(Math.min(height, 480), 260)}
         kind={kind}
-        xCol={cfg.xColumn!}
-        yCol={cfg.yColumn!}
+        xCol={xColumn!}
+        yCol={yColumn!}
         yAggregate={cfg.yAggregate}
         rows={rows}
       />
@@ -639,7 +731,7 @@ export function SqlQueryResultsChart({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 px-4 pb-2">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 px-4 pb-4">
       <div className="flex flex-col gap-2">
         <span className="text-muted-foreground text-xs font-medium">Chart type</span>
         <div
@@ -669,20 +761,20 @@ export function SqlQueryResultsChart({
             <ColumnSelect
               id="pie-label-col"
               label="Label"
-              value={cfg.pieLabelColumn}
-              columns={columns}
-              onChange={(pieLabelColumn) =>
-                onConfigChange({ ...cfg, pieLabelColumn })
+              value={pieLabelColumn}
+              columns={categoricalColumns}
+              onChange={(next) =>
+                onConfigChange({ ...cfg, pieLabelColumn: next })
               }
               placeholder="Column…"
             />
             <ColumnSelect
               id="pie-value-col"
               label="Value"
-              value={cfg.pieValueColumn}
-              columns={columns}
-              onChange={(pieValueColumn) =>
-                onConfigChange({ ...cfg, pieValueColumn })
+              value={pieValueColumn}
+              columns={numericColumns}
+              onChange={(next) =>
+                onConfigChange({ ...cfg, pieValueColumn: next })
               }
               placeholder="Column…"
             />
@@ -695,6 +787,11 @@ export function SqlQueryResultsChart({
               </Label>
               <Select
                 value={cfg.yAggregate}
+                modal={false}
+                items={Y_AGGREGATE_OPTIONS.map((o) => ({
+                  value: o.id,
+                  label: o.label,
+                }))}
                 onValueChange={(v) =>
                   onConfigChange({
                     ...cfg,
@@ -724,17 +821,17 @@ export function SqlQueryResultsChart({
             <ColumnSelect
               id="chart-x-col"
               label={kind === "bar" ? "Category (X)" : "X axis"}
-              value={cfg.xColumn}
-              columns={columns}
-              onChange={(xColumn) => onConfigChange({ ...cfg, xColumn })}
+              value={xColumn}
+              columns={xAxisColumns}
+              onChange={(next) => onConfigChange({ ...cfg, xColumn: next })}
               placeholder="Column…"
             />
             <ColumnSelect
               id="chart-y-col"
               label={kind === "bar" ? "Value (Y)" : "Y axis"}
-              value={cfg.yColumn}
-              columns={columns}
-              onChange={(yColumn) => onConfigChange({ ...cfg, yColumn })}
+              value={yColumn}
+              columns={yAxisColumns}
+              onChange={(next) => onConfigChange({ ...cfg, yColumn: next })}
               placeholder="Column…"
             />
             <div className="flex min-w-0 flex-col gap-1">
@@ -748,6 +845,11 @@ export function SqlQueryResultsChart({
               </Label>
               <Select
                 value={cfg.yAggregate}
+                modal={false}
+                items={Y_AGGREGATE_OPTIONS.map((o) => ({
+                  value: o.id,
+                  label: o.label,
+                }))}
                 onValueChange={(v) =>
                   onConfigChange({
                     ...cfg,

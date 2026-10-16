@@ -9,13 +9,15 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { Play, Plus, X } from "lucide-react";
+import { ChartColumn, Play, Plus, X } from "lucide-react";
 
 import type { ColumnMeta } from "@/lib/column-type-meta";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -115,11 +117,8 @@ export function SqlQueryWorkspace({
   const skipBlurCommitRef = useRef(false);
   const [editingTabId, setEditingTabId] = useState<string | null>(null);
   const [draftLabel, setDraftLabel] = useState("");
-  /** Per query tab: Table vs Chart in the results pane. */
-  const [resultsViewByTabId, setResultsViewByTabId] = useState<
-    Record<string, "table" | "chart">
-  >({});
-  /** Per query tab: chart type and column selections (persist when toggling Table/Chart). */
+  const [chartModalOpen, setChartModalOpen] = useState(false);
+  /** Per query tab: chart type and column selections (persist across modal opens). */
   const [chartConfigByTabId, setChartConfigByTabId] = useState<
     Record<string, QueryChartConfig>
   >({});
@@ -130,9 +129,14 @@ export function SqlQueryWorkspace({
       queueMicrotask(() => {
         setEditingTabId(null);
         setDraftLabel("");
+        setChartModalOpen(false);
       });
     }
   }, [open]);
+
+  useEffect(() => {
+    setChartModalOpen(false);
+  }, [activeTabId]);
 
   const commitRename = useCallback(() => {
     if (editingTabId == null) return;
@@ -171,11 +175,6 @@ export function SqlQueryWorkspace({
   const running =
     activeTabId != null && runningTabId === activeTabId;
 
-  const resultsView: "table" | "chart" =
-    activeTabId != null && resultsViewByTabId[activeTabId] === "chart"
-      ? "chart"
-      : "table";
-
   const chartConfig: QueryChartConfig = useMemo(() => {
     if (activeTabId == null) return defaultQueryChartConfig();
     const raw: QueryChartConfig = {
@@ -201,17 +200,6 @@ export function SqlQueryWorkspace({
           : null,
     };
   }, [activeTabId, result, chartConfigByTabId]);
-
-  const setResultsView = useCallback(
-    (view: "table" | "chart") => {
-      if (activeTabId == null) return;
-      setResultsViewByTabId((prev) => ({
-        ...prev,
-        [activeTabId]: view,
-      }));
-    },
-    [activeTabId],
-  );
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -241,6 +229,7 @@ export function SqlQueryWorkspace({
       : "sql-query-editor";
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton
@@ -441,7 +430,7 @@ export function SqlQueryWorkspace({
                             aria-label="Run query"
                           >
                             <Play className="size-3.5 fill-current" />
-                            Run
+                            Run Query
                           </Button>
                         </div>
                       </div>
@@ -496,48 +485,15 @@ export function SqlQueryWorkspace({
                         >
                           Download as csv
                         </Button>
-                        <div
-                          className="flex flex-wrap items-center gap-1"
-                          role="tablist"
-                          aria-label="Results view"
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="gap-1.5"
+                          onClick={() => setChartModalOpen(true)}
                         >
-                          <Button
-                            type="button"
-                            role="tab"
-                            aria-selected={resultsView === "table"}
-                            size="sm"
-                            variant={
-                              resultsView === "table" ? "default" : "outline"
-                            }
-                            className={cn(
-                              "h-7 rounded-full px-3 text-xs font-medium",
-                              resultsView === "table"
-                                ? ""
-                                : "border-border bg-background",
-                            )}
-                            onClick={() => setResultsView("table")}
-                          >
-                            Table
-                          </Button>
-                          <Button
-                            type="button"
-                            role="tab"
-                            aria-selected={resultsView === "chart"}
-                            size="sm"
-                            variant={
-                              resultsView === "chart" ? "default" : "outline"
-                            }
-                            className={cn(
-                              "h-7 rounded-full px-3 text-xs font-medium",
-                              resultsView === "chart"
-                                ? ""
-                                : "border-border bg-background",
-                            )}
-                            onClick={() => setResultsView("chart")}
-                          >
-                            Chart
-                          </Button>
-                        </div>
+                          <ChartColumn className="size-3.5" />
+                          Build Chart
+                        </Button>
                       </div>
                     ) : null}
                   </div>
@@ -568,7 +524,7 @@ export function SqlQueryWorkspace({
                         No rows returned.
                       </p>
                     ) : null}
-                    {result && result.rows.length > 0 && resultsView === "table" ? (
+                    {result && result.rows.length > 0 ? (
                       <ScrollArea className="h-full min-h-0">
                         <div className="inline-block min-w-full align-middle">
                           <table className="w-full min-w-[640px] border-separate border-spacing-0 text-left text-xs">
@@ -607,28 +563,6 @@ export function SqlQueryWorkspace({
                         </div>
                       </ScrollArea>
                     ) : null}
-                    {result &&
-                    result.rows.length > 0 &&
-                    resultsView === "chart" &&
-                    activeTabId != null ? (
-                      <div className="h-full min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
-                        <SqlQueryResultsChart
-                          columns={result.columns}
-                          rows={result.rows}
-                          config={chartConfig}
-                          onConfigChange={(next) => {
-                            setChartConfigByTabId((prev) => ({
-                              ...prev,
-                              [activeTabId]: {
-                                ...defaultQueryChartConfig(),
-                                ...next,
-                                yAggregate: normalizeYAggregate(next.yAggregate),
-                              },
-                            }));
-                          }}
-                        />
-                      </div>
-                    ) : null}
                   </div>
                     </div>
                   </ResizablePanel>
@@ -640,5 +574,47 @@ export function SqlQueryWorkspace({
         </div>
       </DialogContent>
     </Dialog>
+
+    <Dialog
+      open={
+        open && chartModalOpen && result != null && result.rows.length > 0
+      }
+      onOpenChange={setChartModalOpen}
+    >
+      <DialogContent
+        showCloseButton
+        overlayClassName="z-[60]"
+        className="z-[60] flex h-[min(85dvh,44rem)] w-full max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl"
+      >
+        <DialogHeader className="border-border shrink-0 border-b px-4 py-3 pr-14">
+          <DialogTitle className="uppercase tracking-[0.14em]">
+            Chart
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            Configure and preview a chart from the current query results.
+          </DialogDescription>
+        </DialogHeader>
+        {result && result.rows.length > 0 && activeTabId != null ? (
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden pt-3">
+            <SqlQueryResultsChart
+              columns={result.columns}
+              rows={result.rows}
+              config={chartConfig}
+              onConfigChange={(next) => {
+                setChartConfigByTabId((prev) => ({
+                  ...prev,
+                  [activeTabId]: {
+                    ...defaultQueryChartConfig(),
+                    ...next,
+                    yAggregate: normalizeYAggregate(next.yAggregate),
+                  },
+                }));
+              }}
+            />
+          </div>
+        ) : null}
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

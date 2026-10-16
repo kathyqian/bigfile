@@ -83,6 +83,36 @@ export function parseChartNumber(v: unknown): number | null {
   return null;
 }
 
+/**
+ * Columns that can be used as numeric chart axes: at least one non-empty value
+ * parses as a number, and no non-empty value fails to parse.
+ */
+export function listNumericChartColumns(
+  columns: readonly string[],
+  rows: readonly Record<string, unknown>[],
+): string[] {
+  return columns.filter((col) => {
+    let sawNumeric = false;
+    for (const row of rows) {
+      const v = row[col];
+      if (v === null || v === undefined) continue;
+      if (typeof v === "string" && v.trim() === "") continue;
+      if (parseChartNumber(v) === null) return false;
+      sawNumeric = true;
+    }
+    return sawNumeric;
+  });
+}
+
+/** Columns that are not numeric — used for bar categories and pie labels. */
+export function listNonNumericChartColumns(
+  columns: readonly string[],
+  rows: readonly Record<string, unknown>[],
+): string[] {
+  const numeric = new Set(listNumericChartColumns(columns, rows));
+  return columns.filter((col) => !numeric.has(col));
+}
+
 export function formatChartTick(n: number): string {
   if (!Number.isFinite(n)) return "—";
   const abs = Math.abs(n);
