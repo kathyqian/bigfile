@@ -271,10 +271,15 @@ export function SqlQueryWorkspace({
               className="min-h-0 min-w-0"
             >
               <aside className="bg-muted/20 flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
+                <div className="shrink-0 px-4 pt-3 pb-2">
+                  <span className="text-muted-foreground text-xs font-medium uppercase tracking-[0.14em]">
+                    Columns
+                  </span>
+                </div>
                 <ScrollArea
                   className={cn("min-h-[120px] flex-1", isMd && "min-h-0")}
                 >
-                  <ul className="space-y-2.5 px-4 py-3 pb-4">
+                  <ul className="space-y-2.5 px-4 pt-1 pb-4">
                     {columnMeta.map((c) => (
                       <li key={c.name}>
                         <p
