@@ -1033,7 +1033,7 @@ export function SqlQueryResultsChart({
                   onChange={(next) =>
                     onConfigChange({ ...cfg, pieLabelColumn: next })
                   }
-                  placeholder="Column…"
+                  placeholder="Select Column…"
                 />
                 <ColumnSelect
                   id="pie-value-col"
@@ -1043,7 +1043,7 @@ export function SqlQueryResultsChart({
                   onChange={(next) =>
                     onConfigChange({ ...cfg, pieValueColumn: next })
                   }
-                  placeholder="Column…"
+                  placeholder="Select Column…"
                 />
                 <div className="flex min-w-0 flex-col gap-1">
                   <Label
@@ -1091,7 +1091,7 @@ export function SqlQueryResultsChart({
                   value={xColumn}
                   columns={xAxisColumns}
                   onChange={(next) => onConfigChange({ ...cfg, xColumn: next })}
-                  placeholder="Column…"
+                  placeholder="Select Column…"
                 />
                 <ColumnSelect
                   id="chart-y-col"
@@ -1099,7 +1099,7 @@ export function SqlQueryResultsChart({
                   value={yColumn}
                   columns={yAxisColumns}
                   onChange={(next) => onConfigChange({ ...cfg, yColumn: next })}
-                  placeholder="Column…"
+                  placeholder="Select Column…"
                 />
                 <div className="flex min-w-0 flex-col gap-1">
                   <Label
