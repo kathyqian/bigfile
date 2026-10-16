@@ -776,6 +776,7 @@ function PiePlot({
   const pieCx = pieSize / 2;
   const pieCy = pieSize / 2;
   const pieRadius = Math.max(8, pieSize / 2 - 16);
+  const total = data.reduce((sum, d) => sum + d.value, 0);
 
   return (
     <div className="flex h-full min-h-[220px] min-w-0 flex-col items-center justify-center gap-3 md:flex-row md:gap-6">
@@ -805,22 +806,26 @@ function PiePlot({
           </g>
         </svg>
       </div>
-      <ul className="text-foreground max-h-[min(40vh,240px)] min-w-0 flex-1 list-none space-y-1 overflow-y-auto text-xs md:max-w-56 md:flex-none">
-        {data.map((d, i) => (
-          <li key={d.label} className="flex items-start gap-2 font-mono">
-            <span
-              className="mt-0.5 size-2.5 shrink-0 rounded-sm"
-              style={{ background: sliceColor(i) }}
-              aria-hidden
-            />
-            <span className="min-w-0 break-all" title={d.label}>
-              {d.label}
-            </span>
-            <span className="text-muted-foreground shrink-0">
-              {formatChartTick(d.value)}
-            </span>
-          </li>
-        ))}
+      <ul className="text-foreground max-h-[min(40vh,240px)] w-max max-w-full min-w-0 list-none space-y-1 overflow-x-auto overflow-y-auto text-xs md:flex-none">
+        {data.map((d, i) => {
+          const pct = total > 0 ? (d.value / total) * 100 : 0;
+          return (
+            <li
+              key={d.label}
+              className="flex items-center gap-2 font-mono whitespace-nowrap"
+            >
+              <span
+                className="size-2.5 shrink-0 rounded-sm"
+                style={{ background: sliceColor(i) }}
+                aria-hidden
+              />
+              <span title={d.label}>{d.label}</span>
+              <span className="text-muted-foreground shrink-0 tabular-nums">
+                {formatChartTick(d.value)} ({pct.toFixed(1)}%)
+              </span>
+            </li>
+          );
+        })}
       </ul>
       {hint ? <div className="w-full text-center md:basis-full">{hint}</div> : null}
     </div>
