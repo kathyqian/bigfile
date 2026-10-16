@@ -25,6 +25,10 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { quoteIdent } from "@/lib/csv-query";
+import {
+  downloadCsvText,
+  queryResultToCsv,
+} from "@/lib/query-result-csv";
 import { QUERY_RESULT_ROW_LIMIT } from "@/lib/sql-guardrails";
 import { cn } from "@/lib/utils";
 
@@ -219,6 +223,17 @@ export function SqlQueryWorkspace({
     },
     [onRun, queryDataDisabled, running],
   );
+
+  const downloadResultsCsv = useCallback(() => {
+    if (!result || result.rows.length === 0) return;
+    const base =
+      activeTab?.label.replace(/[^\w.-]+/g, "_").replace(/^_|_$/g, "") ||
+      "query-results";
+    downloadCsvText(
+      queryResultToCsv(result.columns, result.rows),
+      `${base}.csv`,
+    );
+  }, [activeTab?.label, result]);
 
   const editorId =
     activeTabId != null
@@ -465,47 +480,57 @@ export function SqlQueryWorkspace({
                       </span>
                     </div>
                     {result && result.rows.length > 0 ? (
-                      <div
-                        className="flex shrink-0 flex-wrap items-center gap-1"
-                        role="tablist"
-                        aria-label="Results view"
-                      >
+                      <div className="flex shrink-0 flex-wrap items-center gap-3">
                         <Button
                           type="button"
-                          role="tab"
-                          aria-selected={resultsView === "table"}
-                          size="sm"
-                          variant={
-                            resultsView === "table" ? "default" : "outline"
-                          }
-                          className={cn(
-                            "h-7 rounded-full px-3 text-xs font-medium",
-                            resultsView === "table"
-                              ? ""
-                              : "border-border bg-background",
-                          )}
-                          onClick={() => setResultsView("table")}
+                          variant="link"
+                          className="h-auto px-0 text-xs font-normal"
+                          onClick={downloadResultsCsv}
                         >
-                          Table
+                          Download as csv
                         </Button>
-                        <Button
-                          type="button"
-                          role="tab"
-                          aria-selected={resultsView === "chart"}
-                          size="sm"
-                          variant={
-                            resultsView === "chart" ? "default" : "outline"
-                          }
-                          className={cn(
-                            "h-7 rounded-full px-3 text-xs font-medium",
-                            resultsView === "chart"
-                              ? ""
-                              : "border-border bg-background",
-                          )}
-                          onClick={() => setResultsView("chart")}
+                        <div
+                          className="flex flex-wrap items-center gap-1"
+                          role="tablist"
+                          aria-label="Results view"
                         >
-                          Chart
-                        </Button>
+                          <Button
+                            type="button"
+                            role="tab"
+                            aria-selected={resultsView === "table"}
+                            size="sm"
+                            variant={
+                              resultsView === "table" ? "default" : "outline"
+                            }
+                            className={cn(
+                              "h-7 rounded-full px-3 text-xs font-medium",
+                              resultsView === "table"
+                                ? ""
+                                : "border-border bg-background",
+                            )}
+                            onClick={() => setResultsView("table")}
+                          >
+                            Table
+                          </Button>
+                          <Button
+                            type="button"
+                            role="tab"
+                            aria-selected={resultsView === "chart"}
+                            size="sm"
+                            variant={
+                              resultsView === "chart" ? "default" : "outline"
+                            }
+                            className={cn(
+                              "h-7 rounded-full px-3 text-xs font-medium",
+                              resultsView === "chart"
+                                ? ""
+                                : "border-border bg-background",
+                            )}
+                            onClick={() => setResultsView("chart")}
+                          >
+                            Chart
+                          </Button>
+                        </div>
                       </div>
                     ) : null}
                   </div>
