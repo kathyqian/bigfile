@@ -9,7 +9,15 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { ChartColumn, Expand, Minus, Play, Plus, X } from "lucide-react";
+import {
+  ChartColumn,
+  Download,
+  Expand,
+  Minus,
+  Play,
+  Plus,
+  X,
+} from "lucide-react";
 
 import type { ColumnMeta } from "@/lib/column-type-meta";
 import { Button } from "@/components/ui/button";
@@ -524,12 +532,18 @@ export function SqlQueryWorkspace({
                   >
                     <div className="bg-muted/15 flex h-full min-h-0 flex-col border-t-0 p-4">
                       <div className="mb-2 flex min-w-0 shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2">
-                        <label
-                          htmlFor={editorId}
-                          className="text-muted-foreground shrink-0 text-xs font-medium uppercase tracking-[0.14em]"
-                        >
-                          Editor
-                        </label>
+                        <div className="text-muted-foreground flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1 text-xs">
+                          <label
+                            htmlFor={editorId}
+                            className="text-foreground shrink-0 font-medium uppercase tracking-[0.14em]"
+                          >
+                            Editor
+                          </label>
+                          <span className="max-w-full font-normal wrap-break-word">
+                            Max {QUERY_RESULT_ROW_LIMIT.toLocaleString()} rows
+                            for SELECT and WITH
+                          </span>
+                        </div>
                         <div className="flex shrink-0 items-center gap-2">
                           <span className="text-muted-foreground hidden text-xs sm:inline">
                             ⌘↵ / Ctrl+Enter
@@ -583,20 +597,24 @@ export function SqlQueryWorkspace({
                       <span className="text-foreground font-medium uppercase tracking-[0.14em]">
                         Results
                       </span>
-                      <span className="max-w-full font-normal wrap-break-word">
-                        Read-only; max {QUERY_RESULT_ROW_LIMIT.toLocaleString()}{" "}
-                        rows for SELECT and WITH.
-                      </span>
+                      {result ? (
+                        <span className="max-w-full font-normal wrap-break-word">
+                          {result.rows.length.toLocaleString()}{" "}
+                          {result.rows.length === 1 ? "row" : "rows"}
+                        </span>
+                      ) : null}
                     </div>
                     {result && result.rows.length > 0 ? (
                       <div className="flex shrink-0 flex-wrap items-center gap-3">
                         <Button
                           type="button"
-                          variant="link"
-                          className="h-auto px-0 text-xs font-normal"
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5"
                           onClick={downloadResultsCsv}
                         >
-                          Download as csv
+                          <Download className="size-3.5" />
+                          Download
                         </Button>
                         <Button
                           type="button"
