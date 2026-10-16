@@ -113,9 +113,9 @@ export function TextFilterPopoverBody({
   return (
     <div className="flex w-[min(100vw-2rem,20rem)] flex-col gap-2 p-1">
       <div className="flex flex-col gap-1">
-        <Label className="text-muted-foreground text-xs">Search values</Label>
-        <Input
-          className="h-8"
+        <Label className="text-muted-foreground text-xs font-medium">Search values</Label>
+          <Input
+          className="h-8 font-mono text-xs"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Filter list…"
@@ -129,7 +129,7 @@ export function TextFilterPopoverBody({
       ) : (
         <>
           {truncated ? (
-            <p className="text-muted-foreground text-[0.7rem] leading-tight">
+            <p className="text-muted-foreground text-xs leading-tight">
               Showing first {MAX_DISTINCT.toLocaleString()} distinct values.
             </p>
           ) : null}
@@ -149,14 +149,14 @@ export function TextFilterPopoverBody({
               {options.some((v) => v === null) ? (
                 <label
                   className={cn(
-                    "hover:bg-muted/50 flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-sm",
+                    "hover:bg-muted/50 flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-xs",
                   )}
                 >
                   <Checkbox
                     checked={selNull}
                     onCheckedChange={(c) => setSelNull(c === true)}
                   />
-                  <span className="truncate">{labelForValue(null)}</span>
+                  <span className="truncate font-mono text-xs">{labelForValue(null)}</span>
                 </label>
               ) : null}
               {filteredOptions.map((v, i) => {
@@ -165,7 +165,7 @@ export function TextFilterPopoverBody({
                 return (
                   <label
                     key={id}
-                    className="hover:bg-muted/50 flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-sm"
+                    className="hover:bg-muted/50 flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-xs"
                   >
                     <Checkbox
                       checked={selStrings.has(v)}
@@ -183,7 +183,7 @@ export function TextFilterPopoverBody({
       )}
 
       <div className="flex justify-end gap-2 pt-1">
-        <Button type="button" variant="ghost" size="sm" onClick={handleClear}>
+        <Button type="button" variant="outline" size="sm" onClick={handleClear}>
           Clear
         </Button>
         <Button type="button" size="sm" onClick={handleApply}>

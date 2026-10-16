@@ -5,6 +5,8 @@ import { ArrowDown, ArrowUp, ArrowUpDown, ListFilter } from "lucide-react";
 
 import { NumericFilterPopoverBody } from "@/components/csv-filters/numeric-filter-popover";
 import { TextFilterPopoverBody } from "@/components/csv-filters/text-filter-popover";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -141,30 +143,27 @@ export function CsvColumnHeader({
     >
       <div className="flex min-w-0 items-center justify-between gap-1.5">
         <span
-          className="min-w-0 flex-1 truncate font-bold leading-tight"
+          className="min-w-0 flex-1 truncate text-xs font-medium leading-tight"
           title={displayName}
         >
           {displayName}
         </span>
-        <div className="flex shrink-0 items-center gap-0">
+        <div className="flex shrink-0 items-center gap-1">
           <DropdownMenu>
             <DropdownMenuTrigger
-              className={cn(
-                "inline-flex size-7 shrink-0 items-center justify-center rounded-lg border border-transparent outline-none select-none hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
-                hasSort && "text-primary",
-              )}
-              aria-label={`Sort ${displayName}`}
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`Sort ${displayName}`}
+                  className={cn(hasSort && "text-primary")}
+                />
+              }
               onClick={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}
             >
-              <span className="relative inline-flex">
-                <SortIcon className="size-3.5" />
-                {st && sortColumns.length > 1 ? (
-                  <span className="bg-primary text-primary-foreground absolute -right-1 -bottom-1 flex size-3.5 items-center justify-center rounded-full text-[9px] leading-none">
-                    {st.priority}
-                  </span>
-                ) : null}
-              </span>
+              <SortIcon className="size-3.5" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={onSortAsc}>Ascending</DropdownMenuItem>
@@ -173,34 +172,30 @@ export function CsvColumnHeader({
               <DropdownMenuItem onClick={onSortClear}>Clear sort</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          {st && sortColumns.length > 1 ? (
+            <Badge className="px-1 tabular-nums">{st.priority}</Badge>
+          ) : null}
 
           <Popover open={filterPopoverOpen} onOpenChange={setFilterPopoverOpen}>
             <PopoverTrigger
-              className={cn(
-                "inline-flex size-7 shrink-0 items-center justify-center rounded-lg border border-transparent outline-none select-none hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
-                hasFilter && "text-primary bg-primary/10",
-              )}
-              aria-label={
-                hasFilter
-                  ? `Filter (active) — ${displayName}`
-                  : `Filter ${displayName}`
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={
+                    hasFilter
+                      ? `Filter (active) — ${displayName}`
+                      : `Filter ${displayName}`
+                  }
+                  aria-pressed={hasFilter}
+                  className={cn(hasFilter && "bg-primary/10 text-primary")}
+                />
               }
-              aria-pressed={hasFilter}
-              data-active={hasFilter ? "" : undefined}
               onClick={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}
             >
-              <span className="relative inline-flex">
-                <ListFilter
-                  className={cn("size-3.5", hasFilter && "text-primary")}
-                />
-                {hasFilter ? (
-                  <span
-                    className="bg-primary ring-background absolute -top-0.5 -right-0.5 size-2 rounded-full ring-2"
-                    aria-hidden
-                  />
-                ) : null}
-              </span>
+              <ListFilter className="size-3.5" />
             </PopoverTrigger>
             <PopoverContent align="end" className="w-auto p-3">
               {filterMode === "numeric" ? (
@@ -222,7 +217,7 @@ export function CsvColumnHeader({
           </Popover>
         </div>
       </div>
-      <span className="text-muted-foreground truncate text-[0.65rem] leading-tight">
+      <span className="text-muted-foreground truncate text-xs leading-tight">
         {typeLabel}
       </span>
       <div className="w-full min-w-0">

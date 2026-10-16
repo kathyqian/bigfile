@@ -634,7 +634,7 @@ export function CsvViewer() {
               return (
                 <div className="flex h-full min-w-0 items-center py-0.5 pr-1">
                   <span
-                    className="min-w-0 flex-1 truncate font-bold"
+                    className="min-w-0 flex-1 truncate text-xs font-medium"
                     title={name}
                   >
                     {name}
@@ -895,7 +895,7 @@ export function CsvViewer() {
         <main
           className={cn(
             "flex min-h-0 flex-1 flex-col",
-            status === "ready" ? "p-0" : "px-4 py-4 md:px-6",
+            status === "ready" ? "p-0" : "px-4 py-4",
           )}
         >
           {status === "init-db" ? (
@@ -923,12 +923,12 @@ export function CsvViewer() {
                       <FileSpreadsheet className="size-4" />
                     </EmptyMedia>
                     <EmptyTitle>Open a CSV spreadsheet</EmptyTitle>
-                    <EmptyDescription>
+                    <EmptyDescription className="text-foreground/80">
                       Drag and drop a .csv file here, or choose a file to load.
                       Data stays in your browser and is processed locally.
                     </EmptyDescription>
                   </EmptyHeader>
-                  <Button type="button" variant="secondary" onClick={openFile}>
+                  <Button type="button" variant="default" onClick={openFile}>
                     Choose CSV
                   </Button>
                 </Empty>

@@ -1,3 +1,4 @@
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -22,17 +23,17 @@ export function AppTopBar({
   return (
     <header
       className={cn(
-        "border-border bg-background flex shrink-0 items-center justify-between gap-4 border-b px-3 py-3 md:px-4",
+        "border-border bg-background flex h-12 shrink-0 items-center justify-between gap-3 border-b px-4",
         className,
       )}
     >
-      <div className="text-foreground text-lg font-semibold tracking-tight">
+      <div className="text-foreground text-xs font-medium tracking-[0.14em] uppercase">
         Bigfile
       </div>
-      <div className="flex min-w-0 max-w-[70%] items-center justify-end gap-3 md:max-w-[60%]">
+      <div className="flex min-w-0 items-center justify-end gap-2">
         {hasSpreadsheet && fileLabel ? (
           <span
-            className="text-muted-foreground truncate text-right text-sm font-mono"
+            className="text-muted-foreground max-w-[40vw] truncate text-right text-xs font-mono md:max-w-[24rem]"
             title={fileLabel}
           >
             {fileLabel}
@@ -41,7 +42,7 @@ export function AppTopBar({
         {showOpenFileButton && !hasSpreadsheet ? (
           <Button
             type="button"
-            variant="secondary"
+            variant="default"
             size="sm"
             disabled={openFileDisabled}
             onClick={onOpenFile}
@@ -49,6 +50,7 @@ export function AppTopBar({
             Choose CSV
           </Button>
         ) : null}
+        <ThemeToggle />
       </div>
     </header>
   );

@@ -109,7 +109,7 @@ export function NumericFilterPopoverBody({ initial, onApply }: Props) {
   return (
     <div className="flex w-[min(100vw-2rem,18rem)] flex-col gap-3 p-1">
       <div className="flex flex-col gap-2">
-        <Label className="text-muted-foreground text-xs">Mode</Label>
+        <Label className="text-muted-foreground text-xs font-medium">Mode</Label>
         <Select
           value={mode}
           onValueChange={(v) => setMode(v as "between" | "cmp")}
@@ -127,9 +127,9 @@ export function NumericFilterPopoverBody({ initial, onApply }: Props) {
       {mode === "between" ? (
         <div className="grid grid-cols-2 gap-2">
           <div className="flex flex-col gap-1">
-            <Label className="text-muted-foreground text-xs">Min</Label>
+            <Label className="text-muted-foreground text-xs font-medium">Min</Label>
             <Input
-              className="h-8"
+              className="h-8 font-mono text-xs"
               inputMode="decimal"
               value={minV}
               onChange={(e) => setMinV(e.target.value)}
@@ -137,9 +137,9 @@ export function NumericFilterPopoverBody({ initial, onApply }: Props) {
             />
           </div>
           <div className="flex flex-col gap-1">
-            <Label className="text-muted-foreground text-xs">Max</Label>
+            <Label className="text-muted-foreground text-xs font-medium">Max</Label>
             <Input
-              className="h-8"
+              className="h-8 font-mono text-xs"
               inputMode="decimal"
               value={maxV}
               onChange={(e) => setMaxV(e.target.value)}
@@ -150,7 +150,7 @@ export function NumericFilterPopoverBody({ initial, onApply }: Props) {
       ) : (
         <div className="flex flex-col gap-2">
           <div className="flex flex-col gap-1">
-            <Label className="text-muted-foreground text-xs">Operator</Label>
+            <Label className="text-muted-foreground text-xs font-medium">Operator</Label>
             <Select
               value={op}
               onValueChange={(v) => setOp(v as NumericCompareOp)}
@@ -168,9 +168,9 @@ export function NumericFilterPopoverBody({ initial, onApply }: Props) {
             </Select>
           </div>
           <div className="flex flex-col gap-1">
-            <Label className="text-muted-foreground text-xs">Value</Label>
+            <Label className="text-muted-foreground text-xs font-medium">Value</Label>
             <Input
-              className="h-8"
+              className="h-8 font-mono text-xs"
               inputMode="decimal"
               value={cmpV}
               onChange={(e) => setCmpV(e.target.value)}
@@ -180,7 +180,7 @@ export function NumericFilterPopoverBody({ initial, onApply }: Props) {
       )}
 
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" size="sm" onClick={handleClear}>
+        <Button type="button" variant="outline" size="sm" onClick={handleClear}>
           Clear
         </Button>
         <Button type="button" size="sm" onClick={handleApply}>

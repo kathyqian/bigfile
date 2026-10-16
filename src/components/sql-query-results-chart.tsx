@@ -28,7 +28,6 @@ import {
   parseChartNumber,
   type YValueAggregate,
 } from "@/lib/chart-series";
-import { cn } from "@/lib/utils";
 
 const NONE_VALUE = "__none__";
 
@@ -173,7 +172,7 @@ function AxisTicksX({
           <text
             y={18}
             textAnchor="middle"
-            className="fill-muted-foreground font-mono text-[10px]"
+            className="fill-muted-foreground font-mono text-[11px]"
           >
             {formatChartTick(t)}
           </text>
@@ -202,7 +201,7 @@ function AxisTicksY({
             x={-10}
             dy="0.35em"
             textAnchor="end"
-            className="fill-muted-foreground font-mono text-[10px]"
+            className="fill-muted-foreground font-mono text-[11px]"
           >
             {formatChartTick(t)}
           </text>
@@ -343,7 +342,7 @@ function CartesianPlot({
                   x={cx}
                   y={innerH + 22}
                   textAnchor="middle"
-                  className="fill-muted-foreground max-w-[120px] truncate font-mono text-[10px]"
+                  className="fill-muted-foreground max-w-[120px] truncate font-mono text-[11px]"
                 >
                   {cat.length > 18 ? `${cat.slice(0, 16)}…` : cat}
                 </text>
@@ -644,7 +643,7 @@ export function SqlQueryResultsChart({
       <div className="flex flex-col gap-2">
         <span className="text-muted-foreground text-xs font-medium">Chart type</span>
         <div
-          className="flex flex-wrap gap-1.5"
+          className="flex flex-wrap gap-2"
           role="tablist"
           aria-label="Chart type"
         >
@@ -655,11 +654,7 @@ export function SqlQueryResultsChart({
               role="tab"
               aria-selected={kind === id}
               size="sm"
-              variant={kind === id ? "default" : "outline"}
-              className={cn(
-                "h-7 rounded-full px-3 text-xs font-medium",
-                kind === id ? "" : "border-border bg-background",
-              )}
+              variant={kind === id ? "default" : "ghost"}
               onClick={() => setKind(id)}
             >
               {label}

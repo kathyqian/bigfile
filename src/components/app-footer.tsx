@@ -44,17 +44,12 @@ export function AppFooter({
   return (
     <footer
       className={cn(
-        "border-border bg-background text-muted-foreground shrink-0 border-t text-sm",
+        "border-border bg-background text-muted-foreground shrink-0 border-t text-xs",
         className,
       )}
     >
-      <div className="flex w-full min-w-0 items-center justify-between gap-4">
-        <div
-          className={cn(
-            "min-w-0 flex-1 py-2.5 pl-3 md:pl-4",
-            !onQueryDataClick && "pr-3 md:pr-4",
-          )}
-        >
+      <div className="flex w-full min-w-0 items-center justify-between gap-3 px-4 py-3">
+        <div className="min-w-0 flex-1">
         {loadError ? (
           "Load failed — see message above"
         ) : importing ? (
@@ -90,18 +85,19 @@ export function AppFooter({
                 {" "}
                 ·{" "}
                 {onActiveFiltersClick ? (
-                  <button
+                  <Button
                     type="button"
+                    variant="link"
                     onClick={onActiveFiltersClick}
                     aria-haspopup="dialog"
-                    className="text-muted-foreground hover:text-foreground inline cursor-pointer rounded-sm border-0 bg-transparent p-0 text-left underline-offset-2 transition-colors hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                    className="h-auto px-0 text-xs font-normal"
                   >
                     filtered by{" "}
                     <span className="text-foreground font-medium tabular-nums">
                       {activeFilterCount.toLocaleString()}
                     </span>{" "}
                     {activeFilterCount === 1 ? "column" : "columns"}
-                  </button>
+                  </Button>
                 ) : (
                   <>
                     filtered by{" "}
@@ -118,18 +114,19 @@ export function AppFooter({
                 {" "}
                 ·{" "}
                 {onSortDetailsClick ? (
-                  <button
+                  <Button
                     type="button"
+                    variant="link"
                     onClick={onSortDetailsClick}
                     aria-haspopup="dialog"
-                    className="text-muted-foreground hover:text-foreground inline cursor-pointer rounded-sm border-0 bg-transparent p-0 text-left underline-offset-2 transition-colors hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                    className="h-auto px-0 text-xs font-normal"
                   >
                     sorted by{" "}
                     <span className="text-foreground font-medium tabular-nums">
                       {sortColumnCount.toLocaleString()}
                     </span>{" "}
                     {sortColumnCount === 1 ? "column" : "columns"}
-                  </button>
+                  </Button>
                 ) : (
                   <>
                     sorted by{" "}
@@ -146,18 +143,16 @@ export function AppFooter({
         ) : null}
         </div>
         {onQueryDataClick ? (
-          <div className="flex shrink-0 items-center pt-2.5 pr-2.5 pb-2.5">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="shrink-0"
-              disabled={queryDataDisabled}
-              onClick={onQueryDataClick}
-            >
-              Query Data
-            </Button>
-          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            disabled={queryDataDisabled}
+            onClick={onQueryDataClick}
+          >
+            Query Data
+          </Button>
         ) : null}
       </div>
     </footer>

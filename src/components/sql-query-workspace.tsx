@@ -234,7 +234,7 @@ export function SqlQueryWorkspace({
         )}
       >
         <div className="bg-background flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <header className="border-border flex shrink-0 items-center border-b px-4 py-3 pr-14 md:px-5 md:pr-16">
+          <header className="border-border flex shrink-0 items-center border-b px-4 py-3 pr-14">
             <DialogTitle
               className="text-foreground font-mono text-base leading-snug font-medium tracking-normal break-all"
               title={tableIdentifier ?? undefined}
@@ -268,7 +268,7 @@ export function SqlQueryWorkspace({
                         >
                           {c.name}
                         </p>
-                        <p className="text-muted-foreground font-mono text-[0.65rem] leading-snug">
+                        <p className="text-muted-foreground font-mono text-xs leading-snug">
                           {c.duckdbType}
                         </p>
                       </li>
@@ -349,7 +349,7 @@ export function SqlQueryWorkspace({
                         <button
                           type="button"
                           className={cn(
-                            "shrink-0 rounded-sm p-1",
+                            "mr-0.5 shrink-0 rounded-sm p-1",
                             isActive
                               ? "text-muted-foreground hover:text-foreground"
                               : "text-muted-foreground/80 hover:text-foreground",
@@ -370,7 +370,7 @@ export function SqlQueryWorkspace({
                   type="button"
                   className={cn(
                     "inline-flex h-8 min-w-8 shrink-0 items-center justify-center rounded-none",
-                    "border-0 border-r border-b border-solid border-border bg-muted/40",
+                    "border-0 border-b border-solid border-border bg-muted/40",
                     "text-muted-foreground hover:bg-muted/55 hover:text-foreground",
                     "dark:bg-muted/25 dark:hover:bg-muted/40",
                     "outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
@@ -400,20 +400,14 @@ export function SqlQueryWorkspace({
                     minSize="22%"
                     className="min-h-0"
                   >
-                    <div className="bg-muted/15 flex h-full min-h-0 flex-col border-t-0 p-3 md:p-4">
+                    <div className="bg-muted/15 flex h-full min-h-0 flex-col border-t-0 p-4">
                       <div className="mb-2 flex min-w-0 shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2">
-                        <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
-                          <label
-                            htmlFor={editorId}
-                            className="text-muted-foreground shrink-0 text-xs font-medium"
-                          >
-                            Editor
-                          </label>
-                          <span className="text-muted-foreground max-w-full text-xs font-normal wrap-break-word">
-                            Read-only; max {QUERY_RESULT_ROW_LIMIT.toLocaleString()} rows
-                            for SELECT and WITH.
-                          </span>
-                        </div>
+                        <label
+                          htmlFor={editorId}
+                          className="text-muted-foreground shrink-0 text-xs font-medium"
+                        >
+                          Editor
+                        </label>
                         <div className="flex shrink-0 items-center gap-2">
                           <span className="text-muted-foreground hidden text-xs sm:inline">
                             ⌘↵ / Ctrl+Enter
@@ -441,7 +435,7 @@ export function SqlQueryWorkspace({
                         spellCheck={false}
                         className={cn(
                           "border-input bg-background text-foreground placeholder:text-muted-foreground",
-                          "focus-visible:ring-ring min-h-0 w-full min-w-0 flex-1 resize-none rounded-lg border p-3 font-mono text-sm leading-relaxed",
+                          "focus-visible:ring-ring min-h-0 w-full min-w-0 flex-1 resize-none rounded-lg border p-3 font-mono text-xs leading-relaxed",
                           "focus-visible:ring-[3px] focus-visible:ring-offset-2 focus-visible:outline-none",
                         )}
                         placeholder={
@@ -462,62 +456,62 @@ export function SqlQueryWorkspace({
                     className="min-h-0"
                   >
                     <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-[color-mix(in_oklab,var(--muted)_12%,transparent)]">
-                  <div className="text-muted-foreground flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3 py-2 text-xs md:px-4">
-                    <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+                  <div className="text-muted-foreground flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3 text-xs">
+                    <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
                       <span className="text-foreground font-medium">Results</span>
-                      {result && result.rows.length > 0 ? (
-                        <div
-                          className="flex flex-wrap items-center gap-1.5"
-                          role="tablist"
-                          aria-label="Results view"
-                        >
-                          <Button
-                            type="button"
-                            role="tab"
-                            aria-selected={resultsView === "table"}
-                            size="sm"
-                            variant={
-                              resultsView === "table" ? "default" : "outline"
-                            }
-                            className={cn(
-                              "h-7 rounded-full px-3 text-xs font-medium",
-                              resultsView === "table"
-                                ? ""
-                                : "border-border bg-background",
-                            )}
-                            onClick={() => setResultsView("table")}
-                          >
-                            Table
-                          </Button>
-                          <Button
-                            type="button"
-                            role="tab"
-                            aria-selected={resultsView === "chart"}
-                            size="sm"
-                            variant={
-                              resultsView === "chart" ? "default" : "outline"
-                            }
-                            className={cn(
-                              "h-7 rounded-full px-3 text-xs font-medium",
-                              resultsView === "chart"
-                                ? ""
-                                : "border-border bg-background",
-                            )}
-                            onClick={() => setResultsView("chart")}
-                          >
-                            Chart
-                          </Button>
-                        </div>
-                      ) : null}
+                      <span className="max-w-full font-normal wrap-break-word">
+                        Read-only; max {QUERY_RESULT_ROW_LIMIT.toLocaleString()}{" "}
+                        rows for SELECT and WITH.
+                      </span>
                     </div>
-                    <span className="max-w-full font-normal wrap-break-word sm:max-w-[min(100%,28rem)] sm:text-right">
-                      Read-only; max {QUERY_RESULT_ROW_LIMIT.toLocaleString()} rows
-                      for SELECT and WITH.
-                    </span>
+                    {result && result.rows.length > 0 ? (
+                      <div
+                        className="flex shrink-0 flex-wrap items-center gap-1"
+                        role="tablist"
+                        aria-label="Results view"
+                      >
+                        <Button
+                          type="button"
+                          role="tab"
+                          aria-selected={resultsView === "table"}
+                          size="sm"
+                          variant={
+                            resultsView === "table" ? "default" : "outline"
+                          }
+                          className={cn(
+                            "h-7 rounded-full px-3 text-xs font-medium",
+                            resultsView === "table"
+                              ? ""
+                              : "border-border bg-background",
+                          )}
+                          onClick={() => setResultsView("table")}
+                        >
+                          Table
+                        </Button>
+                        <Button
+                          type="button"
+                          role="tab"
+                          aria-selected={resultsView === "chart"}
+                          size="sm"
+                          variant={
+                            resultsView === "chart" ? "default" : "outline"
+                          }
+                          className={cn(
+                            "h-7 rounded-full px-3 text-xs font-medium",
+                            resultsView === "chart"
+                              ? ""
+                              : "border-border bg-background",
+                          )}
+                          onClick={() => setResultsView("chart")}
+                        >
+                          Chart
+                        </Button>
+                      </div>
+                    ) : null}
                   </div>
                   {error ? (
                     <div
-                      className="border-destructive/30 bg-destructive/10 text-destructive mx-3 mb-2 rounded-md border px-3 py-2 text-sm md:mx-4"
+                      className="border-destructive/30 bg-destructive/10 text-destructive mx-4 mb-2 rounded-md border px-3 py-2 text-sm"
                       role="alert"
                     >
                       {error}
@@ -545,13 +539,13 @@ export function SqlQueryWorkspace({
                     {result && result.rows.length > 0 && resultsView === "table" ? (
                       <ScrollArea className="h-full min-h-0">
                         <div className="inline-block min-w-full align-middle">
-                          <table className="w-full min-w-[640px] border-collapse text-left text-sm">
+                          <table className="w-full min-w-[640px] border-separate border-spacing-0 text-left text-xs">
                             <thead>
-                              <tr className="bg-muted/80 border-border sticky top-0 z-10 border-b">
+                              <tr>
                                 {result.columns.map((col) => (
                                   <th
                                     key={col}
-                                    className="text-foreground max-w-56 truncate px-3 py-2 font-mono text-xs font-medium whitespace-nowrap"
+                                    className="bg-muted text-foreground sticky top-0 z-10 max-w-56 truncate px-4 py-2 font-mono text-xs font-medium whitespace-nowrap shadow-[inset_0_1px_0_0_var(--border),inset_0_-1px_0_0_var(--border)]"
                                     title={col}
                                   >
                                     {col}
@@ -563,12 +557,12 @@ export function SqlQueryWorkspace({
                               {result.rows.map((row, ri) => (
                                 <tr
                                   key={ri}
-                                  className="border-border/80 odd:bg-background/40 even:bg-background/70 border-b"
+                                  className="odd:bg-background/40 even:bg-background/70"
                                 >
                                   {result.columns.map((col) => (
                                     <td
                                       key={col}
-                                      className="text-foreground max-w-56 truncate px-3 py-1.5 font-mono text-xs whitespace-nowrap"
+                                      className="text-foreground border-border/80 max-w-56 truncate border-b px-4 py-2 font-mono text-xs whitespace-nowrap"
                                       title={formatCell(row[col])}
                                     >
                                       {formatCell(row[col])}
