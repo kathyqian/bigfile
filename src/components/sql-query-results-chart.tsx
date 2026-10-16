@@ -747,10 +747,6 @@ function PiePlot({
     return { data, skipped };
   }, [labelCol, rows, valueCol, yAggregate]);
 
-  const cx = width / 2;
-  const cy = height / 2;
-  const radius = Math.max(8, Math.min(width, height) / 2 - 24);
-
   const hint =
     skipped > 0 ? (
       <p className="text-muted-foreground px-1 pt-1 text-[11px]">
@@ -770,34 +766,46 @@ function PiePlot({
     );
   }
 
+  // Fit the pie within the chart pane, leaving room for the legend beside it.
+  const paneW = width > 0 ? width : 560;
+  const paneH = height > 0 ? height : 260;
+  const pieSize = Math.max(
+    160,
+    Math.min(paneH - 24, paneW * 0.42, 280),
+  );
+  const pieCx = pieSize / 2;
+  const pieCy = pieSize / 2;
+  const pieRadius = Math.max(8, pieSize / 2 - 16);
+
   return (
-    <div className="flex min-h-0 flex-col gap-2 md:flex-row md:items-start">
-      <div className="min-h-[220px] min-w-0 shrink-0 md:w-1/2">
-        <svg width={width} height={height} className="max-h-[min(50vh,320px)]">
-          <Pie
-            data={data}
-            pieValue={(d) => d.value}
-            outerRadius={radius}
-            innerRadius={0}
-            top={cy}
-            left={cx}
-          >
-            {(pie) =>
-              pie.arcs.map((arc, i) => (
-                <g key={`pie-slice-${i}-${String(arc.data.label)}`}>
-                  <path
-                    d={pie.path(arc) ?? ""}
-                    fill={sliceColor(i)}
-                    stroke="var(--background)"
-                    strokeWidth={1}
-                  />
-                </g>
-              ))
-            }
-          </Pie>
+    <div className="flex h-full min-h-[220px] min-w-0 flex-col items-center justify-center gap-3 md:flex-row md:gap-6">
+      <div className="flex shrink-0 items-center justify-center">
+        <svg width={pieSize} height={pieSize}>
+          {/* visx Pie ignores top/left when using children — translate the arcs ourselves. */}
+          <g transform={`translate(${pieCx},${pieCy})`}>
+            <Pie
+              data={data}
+              pieValue={(d) => d.value}
+              outerRadius={pieRadius}
+              innerRadius={0}
+            >
+              {(pie) =>
+                pie.arcs.map((arc, i) => (
+                  <g key={`pie-slice-${i}-${String(arc.data.label)}`}>
+                    <path
+                      d={pie.path(arc) ?? ""}
+                      fill={sliceColor(i)}
+                      stroke="var(--background)"
+                      strokeWidth={1}
+                    />
+                  </g>
+                ))
+              }
+            </Pie>
+          </g>
         </svg>
       </div>
-      <ul className="text-foreground max-h-[min(40vh,220px)] min-w-0 flex-1 list-none space-y-1 overflow-y-auto text-xs">
+      <ul className="text-foreground max-h-[min(40vh,240px)] min-w-0 flex-1 list-none space-y-1 overflow-y-auto text-xs md:max-w-56 md:flex-none">
         {data.map((d, i) => (
           <li key={d.label} className="flex items-start gap-2 font-mono">
             <span
@@ -814,7 +822,7 @@ function PiePlot({
           </li>
         ))}
       </ul>
-      {hint ? <div className="md:w-full">{hint}</div> : null}
+      {hint ? <div className="w-full text-center md:basis-full">{hint}</div> : null}
     </div>
   );
 }
@@ -1188,7 +1196,7 @@ export function SqlQueryResultsChart({
       <div
         ref={ref}
         className={cn(
-          "bg-background/40 min-w-0 flex-1",
+          "bg-background/40 flex min-w-0 flex-1 flex-col",
           isPreview
             ? "min-h-0 w-full p-1"
             : "border-border/60 min-h-[260px] w-full rounded-lg border p-2",
