@@ -9,7 +9,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { ChartColumn, Play, Plus, X } from "lucide-react";
+import { ChartColumn, Expand, Minus, Play, Plus, X } from "lucide-react";
 
 import type { ColumnMeta } from "@/lib/column-type-meta";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,8 @@ import { cn } from "@/lib/utils";
 import {
   SqlQueryResultsChart,
   defaultQueryChartConfig,
+  isQueryChartReady,
+  queryChartKindLabel,
   type QueryChartConfig,
 } from "@/components/sql-query-results-chart";
 import { normalizeYAggregate } from "@/lib/chart-series";
@@ -79,6 +81,41 @@ function formatCell(v: unknown): string {
   return String(v);
 }
 
+type DockedChart = {
+  id: string;
+  config: QueryChartConfig;
+};
+
+function sanitizeChartConfig(
+  raw: QueryChartConfig,
+  result: QueryResultState,
+): QueryChartConfig {
+  const base: QueryChartConfig = {
+    ...defaultQueryChartConfig(),
+    ...raw,
+    yAggregate: normalizeYAggregate(raw.yAggregate),
+  };
+  if (result == null) return base;
+  const cols = new Set(result.columns);
+  return {
+    ...base,
+    xColumn: base.xColumn && cols.has(base.xColumn) ? base.xColumn : null,
+    yColumn: base.yColumn && cols.has(base.yColumn) ? base.yColumn : null,
+    pieLabelColumn:
+      base.pieLabelColumn && cols.has(base.pieLabelColumn)
+        ? base.pieLabelColumn
+        : null,
+    pieValueColumn:
+      base.pieValueColumn && cols.has(base.pieValueColumn)
+        ? base.pieValueColumn
+        : null,
+  };
+}
+
+function newChartId(): string {
+  return crypto.randomUUID();
+}
+
 const MD_MIN_WIDTH_QUERY = "(min-width: 768px)";
 
 function subscribeMdMinWidth(onChange: () => void) {
@@ -118,10 +155,17 @@ export function SqlQueryWorkspace({
   const [editingTabId, setEditingTabId] = useState<string | null>(null);
   const [draftLabel, setDraftLabel] = useState("");
   const [chartModalOpen, setChartModalOpen] = useState(false);
-  /** Per query tab: chart type and column selections (persist across modal opens). */
-  const [chartConfigByTabId, setChartConfigByTabId] = useState<
-    Record<string, QueryChartConfig>
+  /** Chart currently open in the modal; null means a brand-new draft. */
+  const [editingChartId, setEditingChartId] = useState<string | null>(null);
+  const [draftChartConfig, setDraftChartConfig] = useState<QueryChartConfig>(
+    () => defaultQueryChartConfig(),
+  );
+  /** Minimized charts docked in the results pane, keyed by query tab. */
+  const [dockedChartsByTabId, setDockedChartsByTabId] = useState<
+    Record<string, DockedChart[]>
   >({});
+  /** Config to put back on the dock if the user closes an expanded chart unfinished. */
+  const restoreDockedOnCloseRef = useRef<DockedChart | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -130,12 +174,16 @@ export function SqlQueryWorkspace({
         setEditingTabId(null);
         setDraftLabel("");
         setChartModalOpen(false);
+        setEditingChartId(null);
+        restoreDockedOnCloseRef.current = null;
       });
     }
   }, [open]);
 
   useEffect(() => {
     setChartModalOpen(false);
+    setEditingChartId(null);
+    restoreDockedOnCloseRef.current = null;
   }, [activeTabId]);
 
   const commitRename = useCallback(() => {
@@ -175,31 +223,96 @@ export function SqlQueryWorkspace({
   const running =
     activeTabId != null && runningTabId === activeTabId;
 
-  const chartConfig: QueryChartConfig = useMemo(() => {
-    if (activeTabId == null) return defaultQueryChartConfig();
-    const raw: QueryChartConfig = {
-      ...defaultQueryChartConfig(),
-      ...(chartConfigByTabId[activeTabId] ?? {}),
-    };
-    if (result == null) {
-      return { ...raw, yAggregate: normalizeYAggregate(raw.yAggregate) };
+  const chartConfig = useMemo(
+    () => sanitizeChartConfig(draftChartConfig, result),
+    [draftChartConfig, result],
+  );
+
+  const chartReady = useMemo(() => {
+    if (result == null || result.rows.length === 0) return false;
+    return isQueryChartReady(chartConfig, result.columns, result.rows);
+  }, [chartConfig, result]);
+
+  const dockedCharts = useMemo(() => {
+    if (activeTabId == null || result == null || result.rows.length === 0) {
+      return [];
     }
-    const cols = new Set(result.columns);
-    return {
-      ...raw,
-      yAggregate: normalizeYAggregate(raw.yAggregate),
-      xColumn: raw.xColumn && cols.has(raw.xColumn) ? raw.xColumn : null,
-      yColumn: raw.yColumn && cols.has(raw.yColumn) ? raw.yColumn : null,
-      pieLabelColumn:
-        raw.pieLabelColumn && cols.has(raw.pieLabelColumn)
-          ? raw.pieLabelColumn
-          : null,
-      pieValueColumn:
-        raw.pieValueColumn && cols.has(raw.pieValueColumn)
-          ? raw.pieValueColumn
-          : null,
+    return (dockedChartsByTabId[activeTabId] ?? [])
+      .map((chart) => ({
+        ...chart,
+        config: sanitizeChartConfig(chart.config, result),
+      }))
+      .filter((chart) =>
+        isQueryChartReady(chart.config, result.columns, result.rows),
+      );
+  }, [activeTabId, dockedChartsByTabId, result]);
+
+  /** Reopen a minimized chart. */
+  const expandDockedChart = useCallback((chart: DockedChart) => {
+    if (activeTabId == null) return;
+    restoreDockedOnCloseRef.current = chart;
+    setDockedChartsByTabId((prev) => ({
+      ...prev,
+      [activeTabId]: (prev[activeTabId] ?? []).filter((c) => c.id !== chart.id),
+    }));
+    setEditingChartId(chart.id);
+    setDraftChartConfig({
+      ...defaultQueryChartConfig(),
+      ...chart.config,
+      yAggregate: normalizeYAggregate(chart.config.yAggregate),
+    });
+    setChartModalOpen(true);
+  }, [activeTabId]);
+
+  /** Start a fresh chart; leave any docked charts in place. */
+  const buildNewChart = useCallback(() => {
+    restoreDockedOnCloseRef.current = null;
+    setEditingChartId(null);
+    setDraftChartConfig(defaultQueryChartConfig());
+    setChartModalOpen(true);
+  }, []);
+
+  /** Dismiss the modal without docking (Close, Escape, overlay). */
+  const dismissChartModal = useCallback(() => {
+    restoreDockedOnCloseRef.current = null;
+    setChartModalOpen(false);
+    setEditingChartId(null);
+  }, []);
+
+  /** Dock a ready chart at the bottom of Results. */
+  const minimizeChartModal = useCallback(() => {
+    if (activeTabId == null || !chartReady) return;
+    const saved: DockedChart = {
+      id: editingChartId ?? newChartId(),
+      config: chartConfig,
     };
-  }, [activeTabId, result, chartConfigByTabId]);
+    setDockedChartsByTabId((prev) => ({
+      ...prev,
+      [activeTabId]: [...(prev[activeTabId] ?? []), saved],
+    }));
+    restoreDockedOnCloseRef.current = null;
+    setChartModalOpen(false);
+    setEditingChartId(null);
+  }, [activeTabId, chartReady, chartConfig, editingChartId]);
+
+  const handleChartOpenChange = useCallback(
+    (next: boolean) => {
+      if (next) {
+        setChartModalOpen(true);
+        return;
+      }
+      dismissChartModal();
+    },
+    [dismissChartModal],
+  );
+
+  const handleDraftChartConfigChange = useCallback((next: QueryChartConfig) => {
+    setDraftChartConfig({
+      ...defaultQueryChartConfig(),
+      ...next,
+      yAggregate: normalizeYAggregate(next.yAggregate),
+    });
+  }, []);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -489,7 +602,7 @@ export function SqlQueryWorkspace({
                           type="button"
                           size="sm"
                           className="gap-1.5"
-                          onClick={() => setChartModalOpen(true)}
+                          onClick={buildNewChart}
                         >
                           <ChartColumn className="size-3.5" />
                           Build Chart
@@ -505,7 +618,7 @@ export function SqlQueryWorkspace({
                       {error}
                     </div>
                   ) : null}
-                  <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-0 pb-3 md:pb-4">
+                  <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-0 pb-3 md:pb-4">
                     {running ? (
                       <p
                         className="text-muted-foreground border-border/60 bg-muted/40 border-b px-4 py-2 text-xs"
@@ -563,6 +676,34 @@ export function SqlQueryWorkspace({
                         </div>
                       </ScrollArea>
                     ) : null}
+                    {dockedCharts.length > 0 && result ? (
+                      <div
+                        className="absolute right-3 bottom-3 z-20 flex max-w-[calc(100%-1.5rem)] flex-row flex-nowrap items-end justify-end gap-2 overflow-x-auto"
+                        role="region"
+                        aria-label="Minimized charts"
+                      >
+                        {dockedCharts.map((chart) => (
+                          <div
+                            key={chart.id}
+                            className="bg-primary text-primary-foreground border-primary flex shrink-0 items-center gap-3 rounded-full border py-1 pr-1.5 pl-3.5 shadow-sm"
+                          >
+                            <span className="min-w-0 truncate text-xs font-medium uppercase tracking-[0.14em]">
+                              {queryChartKindLabel(chart.config.kind)}
+                            </span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label="Expand chart"
+                              className="text-primary-foreground rounded-full hover:bg-primary-foreground/10 hover:text-primary-foreground"
+                              onClick={() => expandDockedChart(chart)}
+                            >
+                              <Expand className="size-3.5" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                     </div>
                   </ResizablePanel>
@@ -579,37 +720,51 @@ export function SqlQueryWorkspace({
       open={
         open && chartModalOpen && result != null && result.rows.length > 0
       }
-      onOpenChange={setChartModalOpen}
+      onOpenChange={handleChartOpenChange}
     >
       <DialogContent
-        showCloseButton
+        showCloseButton={false}
         overlayClassName="z-[60]"
         className="z-[60] flex h-[min(85dvh,44rem)] w-full max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl"
       >
-        <DialogHeader className="border-border shrink-0 border-b px-4 py-3 pr-14">
+        <DialogHeader className="border-border shrink-0 border-b px-4 py-3 pr-20">
           <DialogTitle className="uppercase tracking-[0.14em]">
-            Chart
+            Build Chart
           </DialogTitle>
           <DialogDescription className="sr-only">
             Configure and preview a chart from the current query results.
           </DialogDescription>
         </DialogHeader>
+        <div className="absolute top-2 right-2 z-10 flex items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Minimize chart"
+            title="Minimize"
+            disabled={!chartReady}
+            onClick={minimizeChartModal}
+          >
+            <Minus className="size-3.5" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Close chart"
+            title="Close"
+            onClick={dismissChartModal}
+          >
+            <X className="size-3.5" />
+          </Button>
+        </div>
         {result && result.rows.length > 0 && activeTabId != null ? (
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden pt-3">
             <SqlQueryResultsChart
               columns={result.columns}
               rows={result.rows}
               config={chartConfig}
-              onConfigChange={(next) => {
-                setChartConfigByTabId((prev) => ({
-                  ...prev,
-                  [activeTabId]: {
-                    ...defaultQueryChartConfig(),
-                    ...next,
-                    yAggregate: normalizeYAggregate(next.yAggregate),
-                  },
-                }));
-              }}
+              onConfigChange={handleDraftChartConfigChange}
             />
           </div>
         ) : null}

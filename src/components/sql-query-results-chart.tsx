@@ -30,6 +30,7 @@ import {
   parseChartNumber,
   type YValueAggregate,
 } from "@/lib/chart-series";
+import { cn } from "@/lib/utils";
 
 const NONE_VALUE = "__none__";
 
@@ -56,6 +57,39 @@ export function defaultQueryChartConfig(): QueryChartConfig {
   };
 }
 
+/** True when the config has enough valid columns to draw a chart. */
+export function isQueryChartReady(
+  config: QueryChartConfig,
+  columns: readonly string[],
+  rows: readonly Record<string, unknown>[],
+): boolean {
+  const cfg = {
+    ...defaultQueryChartConfig(),
+    ...config,
+    yAggregate: normalizeYAggregate(config.yAggregate),
+  };
+  const numericColumns = listNumericChartColumns(columns, rows);
+  const categoricalColumns = listNonNumericChartColumns(columns, rows);
+
+  if (cfg.kind === "pie") {
+    return (
+      cfg.pieLabelColumn != null &&
+      categoricalColumns.includes(cfg.pieLabelColumn) &&
+      cfg.pieValueColumn != null &&
+      numericColumns.includes(cfg.pieValueColumn)
+    );
+  }
+
+  const xAxisColumns =
+    cfg.kind === "bar" ? categoricalColumns : numericColumns;
+  return (
+    cfg.xColumn != null &&
+    xAxisColumns.includes(cfg.xColumn) &&
+    cfg.yColumn != null &&
+    numericColumns.includes(cfg.yColumn)
+  );
+}
+
 const Y_AGGREGATE_OPTIONS: { id: YValueAggregate; label: string }[] = [
   { id: "first", label: "First value" },
   { id: "sum", label: "Sum" },
@@ -72,6 +106,8 @@ type Props = {
   rows: Record<string, unknown>[];
   config: QueryChartConfig;
   onConfigChange: (next: QueryChartConfig) => void;
+  /** Hide type/axis controls; plot only (docked preview). */
+  variant?: "full" | "preview";
 };
 
 const M = { top: 12, right: 16, bottom: 40, left: 52 };
@@ -82,6 +118,10 @@ const CHART_KINDS: { id: QueryChartKind; label: string }[] = [
   { id: "bar", label: "Bar" },
   { id: "pie", label: "Pie" },
 ];
+
+export function queryChartKindLabel(kind: QueryChartKind): string {
+  return CHART_KINDS.find((k) => k.id === kind)?.label ?? "Chart";
+}
 
 function sliceColor(i: number): string {
   const hue = (i * 47) % 360;
@@ -579,6 +619,7 @@ export function SqlQueryResultsChart({
   rows,
   config,
   onConfigChange,
+  variant = "full",
 }: Props) {
   /** Merge with defaults so no field is ever undefined (Base UI Select must stay controlled). */
   const cfg = useMemo((): QueryChartConfig => {
@@ -591,6 +632,7 @@ export function SqlQueryResultsChart({
 
   const { kind } = cfg;
   const { ref, width, height } = useSize();
+  const isPreview = variant === "preview";
 
   const numericColumns = useMemo(
     () => listNumericChartColumns(columns, rows),
@@ -691,6 +733,15 @@ export function SqlQueryResultsChart({
 
   let body: ReactNode = null;
 
+  const plotWidth = isPreview
+    ? Math.max(width, 120)
+    : Math.max(width, kind === "pie" ? 280 : 400);
+  const plotHeight = isPreview
+    ? Math.max(height, 100)
+    : kind === "pie"
+      ? Math.max(Math.min(height, 320), 220)
+      : Math.max(Math.min(height, 480), 260);
+
   if (kind === "pie") {
     if (!pieReady) {
       body = (
@@ -701,8 +752,8 @@ export function SqlQueryResultsChart({
     } else {
       body = (
         <PiePlot
-          width={Math.max(width, 280)}
-          height={Math.max(Math.min(height, 320), 220)}
+          width={plotWidth}
+          height={plotHeight}
           labelCol={pieLabelColumn!}
           valueCol={pieValueColumn!}
           yAggregate={cfg.yAggregate}
@@ -719,8 +770,8 @@ export function SqlQueryResultsChart({
   } else {
     body = (
       <CartesianPlot
-        width={Math.max(width, 400)}
-        height={Math.max(Math.min(height, 480), 260)}
+        width={plotWidth}
+        height={plotHeight}
         kind={kind}
         xCol={xColumn!}
         yCol={yColumn!}
@@ -731,155 +782,171 @@ export function SqlQueryResultsChart({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 px-4 pb-4">
-      <div className="flex flex-col gap-2">
-        <span className="text-muted-foreground text-xs font-medium">Chart type</span>
-        <div
-          className="flex flex-wrap gap-2"
-          role="tablist"
-          aria-label="Chart type"
-        >
-          {CHART_KINDS.map(({ id, label }) => (
-            <Button
-              key={id}
-              type="button"
-              role="tab"
-              aria-selected={kind === id}
-              size="sm"
-              variant={kind === id ? "default" : "ghost"}
-              onClick={() => setKind(id)}
+    <div
+      className={cn(
+        "flex min-h-0 flex-1 flex-col",
+        isPreview ? "gap-0 p-0" : "gap-3 px-4 pb-4",
+      )}
+    >
+      {!isPreview ? (
+        <>
+          <div className="flex flex-col gap-2">
+            <span className="text-muted-foreground text-xs font-medium">
+              Chart type
+            </span>
+            <div
+              className="flex flex-wrap gap-2"
+              role="tablist"
+              aria-label="Chart type"
             >
-              {label}
-            </Button>
-          ))}
-        </div>
-      </div>
+              {CHART_KINDS.map(({ id, label }) => (
+                <Button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={kind === id}
+                  size="sm"
+                  variant={kind === id ? "default" : "ghost"}
+                  onClick={() => setKind(id)}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+          </div>
 
-      <div className="flex flex-wrap gap-x-4 gap-y-3">
-        {kind === "pie" ? (
-          <>
-            <ColumnSelect
-              id="pie-label-col"
-              label="Label"
-              value={pieLabelColumn}
-              columns={categoricalColumns}
-              onChange={(next) =>
-                onConfigChange({ ...cfg, pieLabelColumn: next })
-              }
-              placeholder="Column…"
-            />
-            <ColumnSelect
-              id="pie-value-col"
-              label="Value"
-              value={pieValueColumn}
-              columns={numericColumns}
-              onChange={(next) =>
-                onConfigChange({ ...cfg, pieValueColumn: next })
-              }
-              placeholder="Column…"
-            />
-            <div className="flex min-w-0 flex-col gap-1">
-              <Label
-                htmlFor="pie-value-aggregate"
-                className="text-muted-foreground text-xs font-medium"
-              >
-                Value when duplicate label
-              </Label>
-              <Select
-                value={cfg.yAggregate}
-                modal={false}
-                items={Y_AGGREGATE_OPTIONS.map((o) => ({
-                  value: o.id,
-                  label: o.label,
-                }))}
-                onValueChange={(v) =>
-                  onConfigChange({
-                    ...cfg,
-                    yAggregate: normalizeYAggregate(v),
-                  })
-                }
-              >
-                <SelectTrigger
-                  id="pie-value-aggregate"
-                  size="sm"
-                  className="border-input bg-background dark:bg-input/30 h-8 min-w-40 max-w-full"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Y_AGGREGATE_OPTIONS.map((o) => (
-                    <SelectItem key={o.id} value={o.id}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </>
-        ) : (
-          <>
-            <ColumnSelect
-              id="chart-x-col"
-              label={kind === "bar" ? "Category (X)" : "X axis"}
-              value={xColumn}
-              columns={xAxisColumns}
-              onChange={(next) => onConfigChange({ ...cfg, xColumn: next })}
-              placeholder="Column…"
-            />
-            <ColumnSelect
-              id="chart-y-col"
-              label={kind === "bar" ? "Value (Y)" : "Y axis"}
-              value={yColumn}
-              columns={yAxisColumns}
-              onChange={(next) => onConfigChange({ ...cfg, yColumn: next })}
-              placeholder="Column…"
-            />
-            <div className="flex min-w-0 flex-col gap-1">
-              <Label
-                htmlFor="chart-y-aggregate"
-                className="text-muted-foreground text-xs font-medium"
-              >
-                {kind === "bar"
-                  ? "Value when duplicate category"
-                  : "Y when duplicate X"}
-              </Label>
-              <Select
-                value={cfg.yAggregate}
-                modal={false}
-                items={Y_AGGREGATE_OPTIONS.map((o) => ({
-                  value: o.id,
-                  label: o.label,
-                }))}
-                onValueChange={(v) =>
-                  onConfigChange({
-                    ...cfg,
-                    yAggregate: normalizeYAggregate(v),
-                  })
-                }
-              >
-                <SelectTrigger
-                  id="chart-y-aggregate"
-                  size="sm"
-                  className="border-input bg-background dark:bg-input/30 h-8 min-w-40 max-w-full"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Y_AGGREGATE_OPTIONS.map((o) => (
-                    <SelectItem key={o.id} value={o.id}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </>
-        )}
-      </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-3">
+            {kind === "pie" ? (
+              <>
+                <ColumnSelect
+                  id="pie-label-col"
+                  label="Label"
+                  value={pieLabelColumn}
+                  columns={categoricalColumns}
+                  onChange={(next) =>
+                    onConfigChange({ ...cfg, pieLabelColumn: next })
+                  }
+                  placeholder="Column…"
+                />
+                <ColumnSelect
+                  id="pie-value-col"
+                  label="Value"
+                  value={pieValueColumn}
+                  columns={numericColumns}
+                  onChange={(next) =>
+                    onConfigChange({ ...cfg, pieValueColumn: next })
+                  }
+                  placeholder="Column…"
+                />
+                <div className="flex min-w-0 flex-col gap-1">
+                  <Label
+                    htmlFor="pie-value-aggregate"
+                    className="text-muted-foreground text-xs font-medium"
+                  >
+                    Value when duplicate label
+                  </Label>
+                  <Select
+                    value={cfg.yAggregate}
+                    modal={false}
+                    items={Y_AGGREGATE_OPTIONS.map((o) => ({
+                      value: o.id,
+                      label: o.label,
+                    }))}
+                    onValueChange={(v) =>
+                      onConfigChange({
+                        ...cfg,
+                        yAggregate: normalizeYAggregate(v),
+                      })
+                    }
+                  >
+                    <SelectTrigger
+                      id="pie-value-aggregate"
+                      size="sm"
+                      className="border-input bg-background dark:bg-input/30 h-8 min-w-40 max-w-full"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Y_AGGREGATE_OPTIONS.map((o) => (
+                        <SelectItem key={o.id} value={o.id}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            ) : (
+              <>
+                <ColumnSelect
+                  id="chart-x-col"
+                  label={kind === "bar" ? "Category (X)" : "X axis"}
+                  value={xColumn}
+                  columns={xAxisColumns}
+                  onChange={(next) => onConfigChange({ ...cfg, xColumn: next })}
+                  placeholder="Column…"
+                />
+                <ColumnSelect
+                  id="chart-y-col"
+                  label={kind === "bar" ? "Value (Y)" : "Y axis"}
+                  value={yColumn}
+                  columns={yAxisColumns}
+                  onChange={(next) => onConfigChange({ ...cfg, yColumn: next })}
+                  placeholder="Column…"
+                />
+                <div className="flex min-w-0 flex-col gap-1">
+                  <Label
+                    htmlFor="chart-y-aggregate"
+                    className="text-muted-foreground text-xs font-medium"
+                  >
+                    {kind === "bar"
+                      ? "Value when duplicate category"
+                      : "Y when duplicate X"}
+                  </Label>
+                  <Select
+                    value={cfg.yAggregate}
+                    modal={false}
+                    items={Y_AGGREGATE_OPTIONS.map((o) => ({
+                      value: o.id,
+                      label: o.label,
+                    }))}
+                    onValueChange={(v) =>
+                      onConfigChange({
+                        ...cfg,
+                        yAggregate: normalizeYAggregate(v),
+                      })
+                    }
+                  >
+                    <SelectTrigger
+                      id="chart-y-aggregate"
+                      size="sm"
+                      className="border-input bg-background dark:bg-input/30 h-8 min-w-40 max-w-full"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Y_AGGREGATE_OPTIONS.map((o) => (
+                        <SelectItem key={o.id} value={o.id}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+          </div>
+        </>
+      ) : null}
 
       <div
         ref={ref}
-        className="border-border/60 bg-background/40 min-h-[260px] w-full min-w-0 flex-1 rounded-lg border p-2"
+        className={cn(
+          "bg-background/40 min-w-0 flex-1",
+          isPreview
+            ? "min-h-0 w-full p-1"
+            : "border-border/60 min-h-[260px] w-full rounded-lg border p-2",
+        )}
       >
         {body}
       </div>
