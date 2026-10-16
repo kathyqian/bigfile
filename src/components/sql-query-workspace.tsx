@@ -526,7 +526,7 @@ export function SqlQueryWorkspace({
                 >
                   <ResizablePanel
                     id="sql-editor"
-                    defaultSize="48%"
+                    defaultSize="30%"
                     minSize="22%"
                     className="min-h-0"
                   >
