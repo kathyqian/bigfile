@@ -204,16 +204,19 @@ export function CsvViewer() {
 
   useEffect(() => {
     let cancelled = false;
+    setStatus("init-db");
+    const initPromise = createDuckDB();
     void (async () => {
       try {
-        const handle = await createDuckDB();
+        const handle = await initPromise;
         if (cancelled) {
-          await handle.terminate();
+          await handle.terminate().catch(() => {});
           return;
         }
         duckRef.current = handle;
         setStatus("idle");
       } catch (e) {
+        if (cancelled) return;
         setError(e instanceof Error ? e.message : String(e));
         setStatus("error");
       }
@@ -223,9 +226,14 @@ export function CsvViewer() {
       void (async () => {
         await connRef.current?.close().catch(() => {});
         connRef.current = null;
-        if (duckRef.current) {
-          await duckRef.current.terminate();
-          duckRef.current = null;
+        try {
+          const handle = await initPromise;
+          if (duckRef.current === handle) {
+            duckRef.current = null;
+          }
+          await handle.terminate().catch(() => {});
+        } catch {
+          // Init failed; nothing to terminate.
         }
       })();
     };
