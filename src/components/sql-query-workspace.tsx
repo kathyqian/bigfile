@@ -419,7 +419,7 @@ export function SqlQueryWorkspace({
                       <div className="mb-2 flex min-w-0 shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2">
                         <label
                           htmlFor={editorId}
-                          className="text-muted-foreground shrink-0 text-xs font-medium"
+                          className="text-muted-foreground shrink-0 text-xs font-medium uppercase tracking-[0.14em]"
                         >
                           Editor
                         </label>
@@ -473,7 +473,9 @@ export function SqlQueryWorkspace({
                     <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-[color-mix(in_oklab,var(--muted)_12%,transparent)]">
                   <div className="text-muted-foreground flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3 text-xs">
                     <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
-                      <span className="text-foreground font-medium">Results</span>
+                      <span className="text-foreground font-medium uppercase tracking-[0.14em]">
+                        Results
+                      </span>
                       <span className="max-w-full font-normal wrap-break-word">
                         Read-only; max {QUERY_RESULT_ROW_LIMIT.toLocaleString()}{" "}
                         rows for SELECT and WITH.
