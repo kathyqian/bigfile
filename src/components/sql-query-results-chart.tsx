@@ -4,6 +4,7 @@ import { curveMonotoneX } from "d3-shape";
 import { scaleBand, scaleLinear } from "@visx/scale";
 import { Bar, LinePath, Pie } from "@visx/shape";
 import {
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -23,7 +24,9 @@ import {
 import {
   aggregateNumericValues,
   chartLabelText,
+  formatBestFitEquation,
   formatChartTick,
+  linearBestFit,
   listNonNumericChartColumns,
   listNumericChartColumns,
   normalizeYAggregate,
@@ -42,6 +45,8 @@ export type QueryChartConfig = {
   yColumn: string | null;
   /** When several rows share the same X (or category / pie label), how to combine Y. */
   yAggregate: YValueAggregate;
+  /** Scatter only: draw an OLS best-fit line with its equation. */
+  showBestFitLine: boolean;
   pieLabelColumn: string | null;
   pieValueColumn: string | null;
 };
@@ -52,10 +57,16 @@ export function defaultQueryChartConfig(): QueryChartConfig {
     xColumn: null,
     yColumn: null,
     yAggregate: "sum",
+    showBestFitLine: false,
     pieLabelColumn: null,
     pieValueColumn: null,
   };
 }
+
+const BEST_FIT_OPTIONS = [
+  { id: "show", label: "Show" },
+  { id: "hide", label: "Hide" },
+] as const;
 
 /** True when the config has enough valid columns to draw a chart. */
 export function isQueryChartReady(
@@ -262,6 +273,111 @@ function AxisTicksY({
   );
 }
 
+/** Approx. mono 11px glyph size for collision tests. */
+const BEST_FIT_CHAR_W = 6.6;
+const BEST_FIT_CHAR_H = 12;
+
+function bestFitLabelHitsPoint(
+  labelX: number,
+  labelY: number,
+  angleDeg: number,
+  textW: number,
+  textH: number,
+  px: number,
+  py: number,
+  pad: number,
+): boolean {
+  const rad = (-angleDeg * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const dx = px - labelX;
+  const dy = py - labelY;
+  const lx = dx * cos - dy * sin;
+  const ly = dx * sin + dy * cos;
+  return (
+    Math.abs(lx) <= textW / 2 + pad && Math.abs(ly) <= textH / 2 + pad
+  );
+}
+
+function placeBestFitLabel(
+  lx1: number,
+  ly1: number,
+  lx2: number,
+  ly2: number,
+  label: string,
+  plotPoints: readonly { x: number; y: number }[],
+  innerW: number,
+  innerH: number,
+): { x: number; y: number; angle: number } {
+  const angleDeg = (Math.atan2(ly2 - ly1, lx2 - lx1) * 180) / Math.PI;
+  const textAngle =
+    angleDeg > 90 || angleDeg < -90 ? angleDeg + 180 : angleDeg;
+  const rad = (textAngle * Math.PI) / 180;
+  const textW = Math.max(label.length, 8) * BEST_FIT_CHAR_W;
+  const textH = BEST_FIT_CHAR_H;
+  const pointPad = 5; // clear scatter dots (r≈3.5)
+  const ts = [0.2, 0.35, 0.5, 0.65, 0.8];
+  const offsets = [12, 18, 24, -12, -18, -24];
+
+  type Candidate = { x: number; y: number; hits: number; clearance: number };
+  let best: Candidate | null = null;
+
+  for (const t of ts) {
+    const alongX = lx1 + (lx2 - lx1) * t;
+    const alongY = ly1 + (ly2 - ly1) * t;
+    for (const offset of offsets) {
+      const rawX = alongX + Math.sin(rad) * offset;
+      const rawY = alongY - Math.cos(rad) * offset;
+      const x = Math.min(Math.max(rawX, textW / 2 + 4), innerW - textW / 2 - 4);
+      const y = Math.min(Math.max(rawY, textH / 2 + 4), innerH - textH / 2 - 4);
+      let hits = 0;
+      let clearance = Infinity;
+      for (const p of plotPoints) {
+        const dx = p.x - x;
+        const dy = p.y - y;
+        clearance = Math.min(clearance, Math.hypot(dx, dy));
+        if (
+          bestFitLabelHitsPoint(
+            x,
+            y,
+            textAngle,
+            textW,
+            textH,
+            p.x,
+            p.y,
+            pointPad,
+          )
+        ) {
+          hits++;
+        }
+      }
+      const candidate: Candidate = {
+        x,
+        y,
+        hits,
+        clearance: Number.isFinite(clearance) ? clearance : 0,
+      };
+      if (
+        !best ||
+        candidate.hits < best.hits ||
+        (candidate.hits === best.hits && candidate.clearance > best.clearance)
+      ) {
+        best = candidate;
+      }
+      if (candidate.hits === 0) {
+        // Prefer earlier t / smaller |offset| once clear — already scanning that way.
+        return { x: candidate.x, y: candidate.y, angle: textAngle };
+      }
+    }
+  }
+
+  return {
+    x: best?.x ?? lx1 + (lx2 - lx1) * 0.72,
+    y: best?.y ?? ly1 + (ly2 - ly1) * 0.72 - 12,
+    angle: textAngle,
+  };
+}
+
 function CartesianPlot({
   width,
   height,
@@ -269,6 +385,7 @@ function CartesianPlot({
   xCol,
   yCol,
   yAggregate,
+  showBestFitLine,
   rows,
 }: {
   width: number;
@@ -277,8 +394,10 @@ function CartesianPlot({
   xCol: string;
   yCol: string;
   yAggregate: YValueAggregate;
+  showBestFitLine: boolean;
   rows: Record<string, unknown>[];
 }) {
+  const clipId = `best-fit-${useId().replace(/:/g, "")}`;
   const innerW = Math.max(0, width - M.left - M.right);
   const innerH = Math.max(0, height - M.top - M.bottom);
 
@@ -429,8 +548,58 @@ function CartesianPlot({
       y: yScale(p.y) ?? 0,
     }));
 
+    const fit =
+      kind === "scatter" && showBestFitLine ? linearBestFit(points) : null;
+    let bestFitLine: {
+      x1: number;
+      y1: number;
+      x2: number;
+      y2: number;
+      labelX: number;
+      labelY: number;
+      labelAngle: number;
+      label: string;
+    } | null = null;
+    if (fit) {
+      const [d0, d1] = xScale.domain();
+      const x0 = d0!;
+      const x1 = d1!;
+      const y0 = fit.slope * x0 + fit.intercept;
+      const y1 = fit.slope * x1 + fit.intercept;
+      const lx1 = xScale(x0) ?? 0;
+      const ly1 = yScale(y0) ?? 0;
+      const lx2 = xScale(x1) ?? 0;
+      const ly2 = yScale(y1) ?? 0;
+      const label = formatBestFitEquation(fit.slope, fit.intercept);
+      const placed = placeBestFitLabel(
+        lx1,
+        ly1,
+        lx2,
+        ly2,
+        label,
+        scaled,
+        innerW,
+        innerH,
+      );
+      bestFitLine = {
+        x1: lx1,
+        y1: ly1,
+        x2: lx2,
+        y2: ly2,
+        labelX: placed.x,
+        labelY: placed.y,
+        labelAngle: placed.angle,
+        label,
+      };
+    }
+
     return (
       <svg width={width} height={height} className="overflow-visible">
+        <defs>
+          <clipPath id={clipId}>
+            <rect x={0} y={0} width={innerW} height={innerH} />
+          </clipPath>
+        </defs>
         <g transform={`translate(${M.left},${M.top})`}>
           <rect
             x={0}
@@ -454,6 +623,31 @@ function CartesianPlot({
                 />
               ))
             : null}
+          {bestFitLine ? (
+            <>
+              <g clipPath={`url(#${clipId})`}>
+                <line
+                  x1={bestFitLine.x1}
+                  y1={bestFitLine.y1}
+                  x2={bestFitLine.x2}
+                  y2={bestFitLine.y2}
+                  className="stroke-foreground"
+                  strokeWidth={1.5}
+                  strokeDasharray="5 4"
+                />
+              </g>
+              <text
+                x={bestFitLine.labelX}
+                y={bestFitLine.labelY}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                transform={`rotate(${bestFitLine.labelAngle} ${bestFitLine.labelX} ${bestFitLine.labelY})`}
+                className="fill-foreground font-mono text-[11px]"
+              >
+                {bestFitLine.label}
+              </text>
+            </>
+          ) : null}
           {kind === "line" && scaled.length >= 2 ? (
             <LinePath
               data={scaled}
@@ -476,7 +670,18 @@ function CartesianPlot({
         </g>
       </svg>
     );
-  }, [barRows, height, innerH, innerW, kind, points, width, xDomainCat]);
+  }, [
+    barRows,
+    clipId,
+    height,
+    innerH,
+    innerW,
+    kind,
+    points,
+    showBestFitLine,
+    width,
+    xDomainCat,
+  ]);
 
   const hint =
     skipped > 0 ? (
@@ -627,6 +832,7 @@ export function SqlQueryResultsChart({
       ...defaultQueryChartConfig(),
       ...config,
       yAggregate: normalizeYAggregate(config.yAggregate),
+      showBestFitLine: Boolean(config.showBestFitLine),
     };
   }, [config]);
 
@@ -776,6 +982,7 @@ export function SqlQueryResultsChart({
         xCol={xColumn!}
         yCol={yColumn!}
         yAggregate={cfg.yAggregate}
+        showBestFitLine={kind === "scatter" && cfg.showBestFitLine}
         rows={rows}
       />
     );
@@ -933,6 +1140,45 @@ export function SqlQueryResultsChart({
                     </SelectContent>
                   </Select>
                 </div>
+                {kind === "scatter" ? (
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <Label
+                      htmlFor="chart-best-fit"
+                      className="text-muted-foreground text-xs font-medium"
+                    >
+                      Line of best fit
+                    </Label>
+                    <Select
+                      value={cfg.showBestFitLine ? "show" : "hide"}
+                      modal={false}
+                      items={BEST_FIT_OPTIONS.map((o) => ({
+                        value: o.id,
+                        label: o.label,
+                      }))}
+                      onValueChange={(v) =>
+                        onConfigChange({
+                          ...cfg,
+                          showBestFitLine: v === "show",
+                        })
+                      }
+                    >
+                      <SelectTrigger
+                        id="chart-best-fit"
+                        size="sm"
+                        className="border-input bg-background dark:bg-input/30 h-8 min-w-40 max-w-full"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {BEST_FIT_OPTIONS.map((o) => (
+                          <SelectItem key={o.id} value={o.id}>
+                            {o.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : null}
               </>
             )}
           </div>

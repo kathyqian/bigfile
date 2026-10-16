@@ -127,6 +127,45 @@ export function formatChartTick(n: number): string {
   return n.toPrecision(3);
 }
 
+/** Ordinary least-squares fit; null when there aren't enough distinct X values. */
+export function linearBestFit(
+  points: readonly { x: number; y: number }[],
+): { slope: number; intercept: number } | null {
+  if (points.length < 2) return null;
+  let sumX = 0;
+  let sumY = 0;
+  for (const p of points) {
+    sumX += p.x;
+    sumY += p.y;
+  }
+  const n = points.length;
+  const meanX = sumX / n;
+  const meanY = sumY / n;
+  let num = 0;
+  let den = 0;
+  for (const p of points) {
+    const dx = p.x - meanX;
+    num += dx * (p.y - meanY);
+    den += dx * dx;
+  }
+  if (den === 0 || !Number.isFinite(den)) return null;
+  const slope = num / den;
+  if (!Number.isFinite(slope)) return null;
+  const intercept = meanY - slope * meanX;
+  if (!Number.isFinite(intercept)) return null;
+  return { slope, intercept };
+}
+
+/** Human-readable `y = mx + b` for a best-fit line. */
+export function formatBestFitEquation(slope: number, intercept: number): string {
+  if (Math.abs(slope) < 1e-15) return `y = ${formatChartTick(intercept)}`;
+  const m = formatChartTick(slope);
+  const bAbs = formatChartTick(Math.abs(intercept));
+  if (Math.abs(intercept) < 1e-15) return `y = ${m}x`;
+  const sign = intercept >= 0 ? "+" : "−";
+  return `y = ${m}x ${sign} ${bAbs}`;
+}
+
 export function chartLabelText(v: unknown): string {
   if (v === null || v === undefined) return "";
   if (typeof v === "object") return JSON.stringify(v);
