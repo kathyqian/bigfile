@@ -51,6 +51,7 @@ import {
   isSupportedDataFile,
   registeredUploadName,
 } from "@/lib/data-file-format";
+import { flattenNestedTable } from "@/lib/flatten-nested-table";
 import {
   dropQueryResultTable,
   fetchQueryResultWindow,
@@ -1043,6 +1044,7 @@ export function DataViewer() {
         CREATE OR REPLACE TABLE ${tableQuoted} AS
         SELECT * FROM ${source};
       `);
+      await flattenNestedTable(conn, tableId);
 
       const meta = await fetchTableColumnMeta(conn, tableId);
       const names = meta.map((m) => m.name);
