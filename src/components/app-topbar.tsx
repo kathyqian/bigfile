@@ -1,5 +1,6 @@
 "use client";
 
+import { X } from "lucide-react";
 import { useState } from "react";
 
 import { AboutBigfileDialog } from "@/components/about-bigfile-dialog";
@@ -10,12 +11,14 @@ import { cn } from "@/lib/utils";
 type AppTopBarProps = {
   fileLabel: string | null;
   hasSpreadsheet: boolean;
+  onClearFile?: () => void;
   className?: string;
 };
 
 export function AppTopBar({
   fileLabel,
   hasSpreadsheet,
+  onClearFile,
   className,
 }: AppTopBarProps) {
   const [aboutOpen, setAboutOpen] = useState(false);
@@ -52,12 +55,27 @@ export function AppTopBar({
         </div>
         <div className="flex min-w-0 items-center justify-end gap-2">
           {hasSpreadsheet && fileLabel ? (
-            <span
-              className="text-muted-foreground max-w-[40vw] truncate text-right text-xs font-mono md:max-w-[24rem]"
-              title={fileLabel}
-            >
-              {fileLabel}
-            </span>
+            <div className="flex min-w-0 items-center gap-1">
+              <span
+                className="text-muted-foreground max-w-[40vw] truncate text-right text-xs font-mono md:max-w-[24rem]"
+                title={fileLabel}
+              >
+                {fileLabel}
+              </span>
+              {onClearFile ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Clear file"
+                  title="Clear file"
+                  onClick={onClearFile}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <X className="size-3.5" />
+                </Button>
+              ) : null}
+            </div>
           ) : null}
           <ThemeToggle />
         </div>

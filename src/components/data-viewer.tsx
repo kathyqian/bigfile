@@ -182,6 +182,8 @@ export function DataViewer() {
   const connRef = useRef<duckdb.AsyncDuckDBConnection | null>(null);
   /** DuckDB table name derived from the loaded file name (quoted in SQL via {@link quoteIdent}). */
   const dataTableNameRef = useRef<string | null>(null);
+  /** Virtual path passed to `registerFileBuffer` for the current upload. */
+  const registeredUploadNameRef = useRef<string | null>(null);
   const rowsRef = useRef<GridRow[]>([]);
   const loadedRef = useRef<Uint8Array | null>(null);
   const columnNamesRef = useRef<string[]>([]);
@@ -1003,6 +1005,7 @@ export function DataViewer() {
       setQueryWorkspaceActiveTabId(null);
       setQueryWorkspaceRunningTabId(null);
       dataTableNameRef.current = null;
+      registeredUploadNameRef.current = null;
       setDataTableName(null);
       await connRef.current?.close().catch(() => {});
       connRef.current = null;
@@ -1021,6 +1024,7 @@ export function DataViewer() {
       const buf = await file.arrayBuffer();
       const db = duckRef.current.db;
       const registeredName = registeredUploadName(file);
+      registeredUploadNameRef.current = registeredName;
       await db.registerFileBuffer(registeredName, new Uint8Array(buf));
 
       const conn = await db.connect();
@@ -1093,6 +1097,67 @@ export function DataViewer() {
 
   const openFile = () => fileInputRef.current?.click();
 
+  const clearFile = useCallback(() => {
+    void (async () => {
+      const conn = connRef.current;
+      const db = duckRef.current?.db;
+      const tableId = dataTableNameRef.current;
+      const registeredName = registeredUploadNameRef.current;
+      const tabs = queryWorkspaceTabsRef.current;
+
+      if (conn) {
+        for (const tab of tabs) {
+          if (tab.result?.resultTable) {
+            await dropQueryResultTable(conn, tab.result.resultTable).catch(
+              () => {},
+            );
+          }
+        }
+        if (tableId) {
+          await conn
+            .query(`DROP TABLE IF EXISTS ${quoteIdent(tableId)};`)
+            .catch(() => {});
+        }
+        await conn.close().catch(() => {});
+      }
+      connRef.current = null;
+
+      if (db && registeredName) {
+        await db.dropFile(registeredName).catch(() => {});
+      }
+      registeredUploadNameRef.current = null;
+      dataTableNameRef.current = null;
+      loadedRef.current = null;
+      rowsRef.current = [];
+      columnNamesRef.current = [];
+      columnMetaMapRef.current = new Map();
+      sortColumnsRef.current = [];
+      filtersRef.current = {};
+
+      setQueryWorkspaceOpen(false);
+      setQueryWorkspaceTabs([]);
+      setQueryWorkspaceActiveTabId(null);
+      setQueryWorkspaceRunningTabId(null);
+      setQueryDownloadProgress(null);
+      setQueryDownloadBusy(false);
+      setDataTableName(null);
+      setFileLabel(null);
+      setColumnNames([]);
+      setColumnMeta([]);
+      setTotalRows(0);
+      setTotalRowsUnfiltered(0);
+      setSortColumns([]);
+      setFilters({});
+      setFilterDetailsOpen(false);
+      setSortDetailsOpen(false);
+      setWindowLoading(false);
+      setGridScrollable(false);
+      setError(null);
+      setStatus(duckRef.current ? "idle" : "init-db");
+      bump();
+    })();
+  }, [bump]);
+
   const hasSpreadsheet = status === "ready";
 
   const activeFilterCount = countActiveColumnFilters(filters, columnMetaMap);
@@ -1115,7 +1180,11 @@ export function DataViewer() {
         onChange={onBrowse}
       />
 
-      <AppTopBar fileLabel={fileLabel} hasSpreadsheet={hasSpreadsheet} />
+      <AppTopBar
+        fileLabel={fileLabel}
+        hasSpreadsheet={hasSpreadsheet}
+        onClearFile={clearFile}
+      />
 
       <div
         className={cn(
