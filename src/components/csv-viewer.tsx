@@ -630,6 +630,8 @@ export function CsvViewer() {
     const dataColumns: ColumnOrColumnGroup<GridRow>[] = columnNames.map(
       (name, colIndex) => {
         const letter = excelColumnLabel(colIndex);
+        const meta = metaByName.get(name);
+        const isNumeric = meta?.filterMode === "numeric";
         const leafColumn: Column<GridRow> = {
           key: name,
           name,
@@ -637,8 +639,11 @@ export function CsvViewer() {
           sortable: false,
           editable: false,
           headerCellClass: `rdg-csv-header-z-${colIndex}`,
+          cellClass: cn(
+            "text-xs font-mono tabular-nums",
+            isNumeric && "text-right",
+          ),
           renderHeaderCell(p: RenderHeaderCellProps<GridRow>) {
-            const meta = metaByName.get(name);
             if (!meta) {
               return (
                 <div className="flex h-full min-w-0 items-center py-0.5 pr-1">
@@ -671,7 +676,9 @@ export function CsvViewer() {
           },
           renderCell({ row, column }: RenderCellProps<GridRow>) {
             if (!row.__loaded) {
-              return <span className="text-muted-foreground text-xs">…</span>;
+              return (
+                <span className="text-muted-foreground text-xs font-mono">…</span>
+              );
             }
             const v = (row as Record<string, unknown>)[column.key];
             if (v === null || v === undefined) return "";

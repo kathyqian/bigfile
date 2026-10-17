@@ -49,7 +49,10 @@ import {
   queryChartKindLabel,
   type QueryChartConfig,
 } from "@/components/sql-query-results-chart";
-import { normalizeYAggregate } from "@/lib/chart-series";
+import {
+  listNumericChartColumns,
+  normalizeYAggregate,
+} from "@/lib/chart-series";
 
 export type QueryResultState = {
   columns: string[];
@@ -230,6 +233,11 @@ export function SqlQueryWorkspace({
   const error = activeTab?.error ?? null;
   const running =
     activeTabId != null && runningTabId === activeTabId;
+
+  const resultNumericColumns = useMemo(() => {
+    if (result == null || result.rows.length === 0) return new Set<string>();
+    return new Set(listNumericChartColumns(result.columns, result.rows));
+  }, [result]);
 
   const chartConfig = useMemo(
     () => sanitizeChartConfig(draftChartConfig, result),
@@ -660,13 +668,18 @@ export function SqlQueryWorkspace({
                     {result && result.rows.length > 0 ? (
                       <ScrollArea className="h-full min-h-0">
                         <div className="inline-block min-w-full align-middle">
-                          <table className="w-full min-w-[640px] border-separate border-spacing-0 text-left text-xs">
+                          <table className="w-full min-w-[640px] border-separate border-spacing-0 text-xs">
                             <thead>
                               <tr>
                                 {result.columns.map((col) => (
                                   <th
                                     key={col}
-                                    className="bg-muted text-foreground sticky top-0 z-10 max-w-56 truncate px-4 py-2 font-mono text-xs font-medium whitespace-nowrap shadow-[inset_0_1px_0_0_var(--border),inset_0_-1px_0_0_var(--border)]"
+                                    className={cn(
+                                      "bg-muted text-foreground sticky top-0 z-10 max-w-56 truncate px-4 py-2 font-mono text-xs font-medium whitespace-nowrap shadow-[inset_0_1px_0_0_var(--border),inset_0_-1px_0_0_var(--border)]",
+                                      resultNumericColumns.has(col)
+                                        ? "text-right"
+                                        : "text-left",
+                                    )}
                                     title={col}
                                   >
                                     {col}
@@ -683,7 +696,12 @@ export function SqlQueryWorkspace({
                                   {result.columns.map((col) => (
                                     <td
                                       key={col}
-                                      className="text-foreground border-border/80 max-w-56 truncate border-b px-4 py-2 font-mono text-xs whitespace-nowrap"
+                                      className={cn(
+                                        "text-foreground border-border/80 max-w-56 truncate border-b px-4 py-2 font-mono text-xs tabular-nums whitespace-nowrap",
+                                        resultNumericColumns.has(col)
+                                          ? "text-right"
+                                          : "text-left",
+                                      )}
                                       title={formatCell(row[col])}
                                     >
                                       {formatCell(row[col])}

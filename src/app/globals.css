@@ -159,6 +159,12 @@
   border-inline-end: 1px solid var(--border);
 }
 
+/* Body cells: mono data type; numeric columns set text-right via cellClass. */
+.rdg-wrap .rdg-row .rdg-cell {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Pull sort/filter closer to the edge; pin content to the top (RDG defaults to align-content: center). */
 .rdg-wrap .rdg-header-row .rdg-cell[class*="rdg-csv-header-z-"] {
   align-content: start;
