@@ -19,7 +19,6 @@ import {
   type RenderHeaderCellProps,
 } from "react-data-grid";
 import "react-data-grid/lib/styles.css";
-import { FileSpreadsheet } from "lucide-react";
 
 import { CsvColumnHeader } from "@/components/csv-column-header";
 import { AppFooter } from "@/components/app-footer";
@@ -54,7 +53,6 @@ import {
   Empty,
   EmptyDescription,
   EmptyHeader,
-  EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
 import {
@@ -927,10 +925,7 @@ export function CsvViewer() {
               <div className="w-full max-w-md shrink-0">
                 <Empty className="border-border border border-dashed">
                   <EmptyHeader>
-                    <EmptyMedia variant="icon">
-                      <FileSpreadsheet className="size-4" />
-                    </EmptyMedia>
-                    <EmptyTitle>Open a CSV spreadsheet</EmptyTitle>
+                    <EmptyTitle>Open a CSV</EmptyTitle>
                     <EmptyDescription className="text-foreground/80">
                       Drag and drop a .csv file here, or choose a file to load.
                       Data stays in your browser and is processed locally.

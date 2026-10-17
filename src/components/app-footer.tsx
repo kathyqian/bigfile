@@ -145,7 +145,6 @@ export function AppFooter({
         {onQueryDataClick ? (
           <Button
             type="button"
-            variant="outline"
             size="sm"
             className="shrink-0"
             disabled={queryDataDisabled}
