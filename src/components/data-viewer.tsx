@@ -1155,7 +1155,7 @@ export function DataViewer() {
               <div className="w-full max-w-md shrink-0">
                 <Empty className="border-border border border-dashed">
                   <EmptyHeader>
-                    <EmptyTitle>Open a File</EmptyTitle>
+                    <EmptyTitle>Open a Data File</EmptyTitle>
                     <EmptyDescription className="text-foreground/80">
                       Drag and drop a file here, or choose one to load. Accepts{" "}
                       {ACCEPTED_FILE_HELP}. Data stays in your browser and is
