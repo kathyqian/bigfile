@@ -1,6 +1,6 @@
-# CSV viewer (DuckDB WASM)
+# Bigfile (DuckDB WASM)
 
-Browser-only app: drag and drop a CSV, load it into **DuckDB WebAssembly**, and browse it in a read-only **react-data-grid** with windowed queries so large files do not need every row in memory at once.
+Browser-only app: drag and drop a flat file (CSV, TSV, JSON, Parquet, and more), load it into **DuckDB WebAssembly**, and browse it in a read-only **react-data-grid** with windowed queries so large files do not need every row in memory at once.
 
 Stack: Next.js (App Router), Tailwind CSS, shadcn/ui, `@duckdb/duckdb-wasm`, `react-data-grid`.
 

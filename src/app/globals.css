@@ -173,14 +173,14 @@
 }
 
 /* Pull sort/filter closer to the edge; pin content to the top (RDG defaults to align-content: center). */
-.rdg-wrap .rdg-header-row .rdg-cell[class*="rdg-csv-header-z-"] {
+.rdg-wrap .rdg-header-row .rdg-cell[class*="rdg-data-header-z-"] {
   align-content: start;
   padding-inline-end: 2px;
 }
 
 /*
  * Column resize: same hit width as shadcn ResizableHandle (1px line + ::after w-1).
- * Centered on the border between columns; csv-viewer assigns descending z-index on
+ * Centered on the border between columns; data-viewer assigns descending z-index on
  * data headers so the left column’s handle receives events in the overlap (see
  * headerResizeStackCss).
  */
@@ -207,7 +207,7 @@
  * When the grid scrolls, the bottom-most visible row + footer border-t can read
  * as a double line. Strip that row’s bottom border only in that case.
  * Short tables (no overflow) keep the last row’s bottom border — see .rdg-scrollable
- * toggled from csv-viewer when scrollHeight > clientHeight.
+ * toggled from data-viewer when scrollHeight > clientHeight.
  */
 .rdg-wrap.rdg-scrollable
   .rdg-row:nth-last-child(1 of .rdg-row)
@@ -228,11 +228,11 @@
 
 /*
  * RDG's GroupedColumnHeaderCell does not merge getCellStyle (no frozen inset).
- * Class is on the row-gutter group header; csv-viewer also sets insetInlineStart inline.
+ * Class is on the row-gutter group header; data-viewer also sets insetInlineStart inline.
  * z-index must beat headerResizeStackCss (10000+n) so scrolled histogram headers stay behind.
  */
 .rdg-wrap .rdg-gutter-corner-letter,
-.rdg-wrap .rdg-header-row .rdg-csv-header-gutter {
+.rdg-wrap .rdg-header-row .rdg-data-header-gutter {
   position: sticky;
   inset-inline-start: var(--rdg-frozen-left-0, 0px);
   z-index: 20000;

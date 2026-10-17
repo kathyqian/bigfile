@@ -39,7 +39,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { defaultSelectAllSql } from "@/lib/csv-query";
+import { defaultSelectAllSql } from "@/lib/data-query";
 import { SqlCodeEditor } from "@/components/sql-code-editor";
 import { cn } from "@/lib/utils";
 
@@ -86,7 +86,7 @@ export type QueryDownloadProgress = {
 type SqlQueryWorkspaceProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** DuckDB table identifier derived from the loaded CSV file name. */
+  /** DuckDB table identifier derived from the loaded file name. */
   tableIdentifier: string | null;
   columnMeta: ColumnMeta[];
   tabs: QueryWorkspaceTab[];

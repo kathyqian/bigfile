@@ -46,7 +46,7 @@ Muted text is darker than a typical stone-500 so 12px copy stays readable: `#575
 
 Button hierarchy, all shadcn `Button`:
 
-- **Primary** (`default`) — the one forward action on a surface (Choose CSV, Run, Apply).
+- **Primary** (`default`) — the one forward action on a surface (Choose File, Run, Apply).
 - **Outline** — secondary actions (Query Data, Dismiss, Clear).
 - **Ghost** `size="icon-sm"` — theme toggle, sort, filter, icon-only controls.
 - **Link** — inline text actions such as the footer filter and sort details.

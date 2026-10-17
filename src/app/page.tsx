@@ -1,5 +1,5 @@
-import { CsvViewer } from "@/components/csv-viewer";
+import { DataViewer } from "@/components/data-viewer";
 
 export default function Home() {
-  return <CsvViewer />;
+  return <DataViewer />;
 }

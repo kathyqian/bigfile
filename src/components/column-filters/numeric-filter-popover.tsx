@@ -15,7 +15,7 @@ import {
 import type {
   NumericColumnFilter,
   NumericCompareOp,
-} from "@/lib/csv-query";
+} from "@/lib/data-query";
 
 const OPS: NumericCompareOp[] = ["=", "!=", "<", "<=", ">", ">="];
 

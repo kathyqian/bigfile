@@ -18,7 +18,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Bigfile",
   description:
-    "Drag and drop a CSV to explore it in your browser. Everything stays local.",
+    "Drag and drop a data file to explore it in your browser. Everything stays local.",
 };
 
 export default function RootLayout({

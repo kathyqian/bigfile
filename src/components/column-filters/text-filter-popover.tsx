@@ -7,8 +7,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import type { TextColumnFilter } from "@/lib/csv-query";
-import { isTextFilterActive } from "@/lib/csv-query";
+import type { TextColumnFilter } from "@/lib/data-query";
+import { isTextFilterActive } from "@/lib/data-query";
 import { cn } from "@/lib/utils";
 
 const MAX_DISTINCT = 10_000;

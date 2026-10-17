@@ -1,7 +1,7 @@
 import type { Table as ArrowTable } from "apache-arrow";
 
 import { arrowTableColumnNames, arrowTableToObjects } from "@/lib/arrow-table";
-import { quoteIdent } from "@/lib/csv-query";
+import { quoteIdent } from "@/lib/data-query";
 
 export const QUERY_RESULT_FETCH_CHUNK = 1000;
 

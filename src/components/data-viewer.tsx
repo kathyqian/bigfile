@@ -20,7 +20,7 @@ import {
 } from "react-data-grid";
 import "react-data-grid/lib/styles.css";
 
-import { CsvColumnHeader } from "@/components/csv-column-header";
+import { DataColumnHeader } from "@/components/data-column-header";
 import { AppFooter } from "@/components/app-footer";
 import { AppTopBar } from "@/components/app-topbar";
 import { createDuckDB } from "@/lib/duckdb-client";
@@ -40,9 +40,9 @@ import {
   listSortDetails,
   quoteIdent,
   type SortColumn,
-} from "@/lib/csv-query";
+} from "@/lib/data-query";
 import { prepareReadOnlyQuery } from "@/lib/sql-guardrails";
-import { tableIdentifierFromFileName } from "@/lib/csv-table-name";
+import { tableIdentifierFromFileName } from "@/lib/data-table-name";
 import {
   ACCEPTED_FILE_HELP,
   ACCEPTED_FILE_INPUT,
@@ -66,7 +66,7 @@ import {
   downloadCsvText,
   queryResultCsvBody,
   queryResultCsvHeader,
-} from "@/lib/query-result-csv";
+} from "@/lib/query-result-export";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -97,7 +97,7 @@ import {
 } from "@/components/sql-query-workspace";
 import type { QueryChartConfig } from "@/components/sql-query-results-chart";
 
-/** Grid-only; avoids colliding with a CSV column named "row" or similar. */
+/** Grid-only; avoids colliding with a data column named "row" or similar. */
 const ROW_NUM_KEY = "__rdg_rn__";
 const ROW_HEIGHT = 35;
 /** Shared styles for column letters (A, B, …) and row index gutter (1, 2, …). */
@@ -106,7 +106,7 @@ const GUTTER_LABEL_CLASS =
 /** Grouped letter-row cell above the row-number column; RDG omits frozen inset on group headers. */
 const GUTTER_CORNER_LETTER_CLASS = "rdg-gutter-corner-letter";
 /** Frozen row-index header in the name/histogram tier — must stack above resize z-index CSS. */
-const GUTTER_HEADER_CLASS = "rdg-csv-header-gutter";
+const GUTTER_HEADER_CLASS = "rdg-data-header-gutter";
 /** Tier with column names, filters, type label, and histogram. */
 const HEADER_MAIN_ROW_HEIGHT = 92;
 /** Column letters row — same pixel height as body rows ({@link ROW_HEIGHT}). */
@@ -173,12 +173,12 @@ function excelColumnLabel(zeroBasedIndex: number): string {
   return s;
 }
 
-export function CsvViewer() {
+export function DataViewer() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const gridRef = useRef<DataGridHandle>(null);
   const duckRef = useRef<Awaited<ReturnType<typeof createDuckDB>> | null>(null);
   const connRef = useRef<duckdb.AsyncDuckDBConnection | null>(null);
-  /** DuckDB table name derived from the loaded CSV file name (quoted in SQL via {@link quoteIdent}). */
+  /** DuckDB table name derived from the loaded file name (quoted in SQL via {@link quoteIdent}). */
   const dataTableNameRef = useRef<string | null>(null);
   const rowsRef = useRef<GridRow[]>([]);
   const loadedRef = useRef<Uint8Array | null>(null);
@@ -848,7 +848,7 @@ export function CsvViewer() {
           resizable: true,
           sortable: false,
           editable: false,
-          headerCellClass: `rdg-csv-header-z-${colIndex}`,
+          headerCellClass: `rdg-data-header-z-${colIndex}`,
           cellClass: cn(
             "text-xs font-mono tabular-nums",
             isNumeric && "text-right",
@@ -867,7 +867,7 @@ export function CsvViewer() {
               );
             }
             return (
-              <CsvColumnHeader
+              <DataColumnHeader
                 columnKey={name}
                 displayName={name}
                 typeLabel={meta.typeLabel}
@@ -937,7 +937,7 @@ export function CsvViewer() {
     return columnNames
       .map(
         (_, colIndex) =>
-          `.rdg-wrap .rdg-header-row .rdg-csv-header-z-${colIndex}{z-index:${
+          `.rdg-wrap .rdg-header-row .rdg-data-header-z-${colIndex}{z-index:${
             10000 + n - colIndex
           }}`,
       )

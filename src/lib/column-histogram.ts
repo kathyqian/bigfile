@@ -2,7 +2,7 @@ import {
   sqlNumericExpr,
   type ColumnMeta,
 } from "@/lib/column-type-meta";
-import { quoteIdent } from "@/lib/csv-query";
+import { quoteIdent } from "@/lib/data-query";
 
 export const NUMERIC_BINS = 20;
 

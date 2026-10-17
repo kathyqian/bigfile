@@ -5,7 +5,7 @@ import {
   normalizeYAggregate,
   type YValueAggregate,
 } from "@/lib/chart-series";
-import { quoteIdent } from "@/lib/csv-query";
+import { quoteIdent } from "@/lib/data-query";
 
 /** Minimal chart config needed to build series SQL (avoids importing UI). */
 export type QueryChartSeriesConfig = {

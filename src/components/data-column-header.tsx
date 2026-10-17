@@ -11,8 +11,8 @@ import {
 } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown, ListFilter } from "lucide-react";
 
-import { NumericFilterPopoverBody } from "@/components/csv-filters/numeric-filter-popover";
-import { TextFilterPopoverBody } from "@/components/csv-filters/text-filter-popover";
+import { NumericFilterPopoverBody } from "@/components/column-filters/numeric-filter-popover";
+import { TextFilterPopoverBody } from "@/components/column-filters/text-filter-popover";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -27,7 +27,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import type { ColumnFilterMode } from "@/lib/column-type-meta";
-import type { ColumnFilter, SortColumn } from "@/lib/csv-query";
+import type { ColumnFilter, SortColumn } from "@/lib/data-query";
 import { ColumnHistogramMini } from "@/components/column-histogram-mini";
 import type { ColumnHistogramData } from "@/lib/column-histogram";
 import type { ColumnStats } from "@/lib/column-stats";
@@ -154,7 +154,7 @@ function ColumnStatsTooltip({
   return createPortal(el, document.body);
 }
 
-export function CsvColumnHeader({
+export function DataColumnHeader({
   columnKey,
   displayName,
   typeLabel,
