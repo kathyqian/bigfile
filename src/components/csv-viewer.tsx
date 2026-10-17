@@ -41,6 +41,22 @@ import {
 } from "@/lib/csv-query";
 import { prepareReadOnlyQuery } from "@/lib/sql-guardrails";
 import { tableIdentifierFromFileName } from "@/lib/csv-table-name";
+import {
+  dropQueryResultTable,
+  fetchQueryResultWindow,
+  materializeQueryResult,
+  queryResultTableName,
+  QUERY_RESULT_FETCH_CHUNK,
+} from "@/lib/query-result-table";
+import {
+  fetchQueryChartSeries,
+  fetchQueryResultSample,
+} from "@/lib/query-chart-sql";
+import {
+  downloadCsvText,
+  queryResultCsvBody,
+  queryResultCsvHeader,
+} from "@/lib/query-result-csv";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -66,8 +82,10 @@ import {
 import { cn } from "@/lib/utils";
 import {
   SqlQueryWorkspace,
+  type QueryDownloadProgress,
   type QueryWorkspaceTab,
 } from "@/components/sql-query-workspace";
+import type { QueryChartConfig } from "@/components/sql-query-results-chart";
 
 const REGISTERED_NAME = "upload.csv";
 /** Grid-only; avoids colliding with a CSV column named "row" or similar. */
@@ -93,7 +111,7 @@ const HEADER_ROW_UNIFORM_HEIGHT = Math.round(
   (HEADER_LETTER_ROW_HEIGHT + HEADER_MAIN_ROW_HEIGHT) / 2,
 );
 const SCROLL_OVERSCAN_ROWS = 80;
-const FETCH_CHUNK_ROWS = 8000;
+const FETCH_CHUNK_ROWS = 1000;
 /** Fetch up to N+1 rows to detect truncation */
 const MAX_DISTINCT = 10_000;
 
@@ -195,6 +213,9 @@ export function CsvViewer() {
   const [queryWorkspaceRunningTabId, setQueryWorkspaceRunningTabId] = useState<
     string | null
   >(null);
+  const [queryDownloadProgress, setQueryDownloadProgress] =
+    useState<QueryDownloadProgress>(null);
+  const [queryDownloadBusy, setQueryDownloadBusy] = useState(false);
 
   const queryWorkspaceTabsRef = useRef<QueryWorkspaceTab[]>([]);
   queryWorkspaceTabsRef.current = queryWorkspaceTabs;
@@ -433,16 +454,63 @@ export function CsvViewer() {
       prev.map((t) => (t.id === activeId ? { ...t, error: null } : t)),
     );
     try {
-      const table = (await conn.query(prepared.sql)) as ArrowTable;
-      const rows = arrowTableToObjects(table);
-      const columns = arrowTableColumnNames(table);
-      setQueryWorkspaceTabs((prev) =>
-        prev.map((t) =>
-          t.id === activeId
-            ? { ...t, result: { columns, rows }, error: null }
-            : t,
-        ),
-      );
+      const prevResult = tab.result;
+      if (prevResult?.resultTable) {
+        await dropQueryResultTable(conn, prevResult.resultTable);
+      }
+
+      if (prepared.kind === "meta") {
+        const table = (await conn.query(prepared.sql)) as ArrowTable;
+        const rows = arrowTableToObjects(table);
+        const columns = arrowTableColumnNames(table);
+        setQueryWorkspaceTabs((prev) =>
+          prev.map((t) =>
+            t.id === activeId
+              ? {
+                  ...t,
+                  result: {
+                    columns,
+                    totalRows: rows.length,
+                    resultTable: null,
+                    inlineRows: rows,
+                    sampleRows: rows.slice(0, 500),
+                    revision: Date.now(),
+                  },
+                  error: null,
+                }
+              : t,
+          ),
+        );
+      } else {
+        const resultTable = queryResultTableName(activeId);
+        const { columns, totalRows } = await materializeQueryResult(
+          conn,
+          resultTable,
+          prepared.sql,
+        );
+        const sampleRows = await fetchQueryResultSample(
+          conn,
+          resultTable,
+          columns,
+        );
+        setQueryWorkspaceTabs((prev) =>
+          prev.map((t) =>
+            t.id === activeId
+              ? {
+                  ...t,
+                  result: {
+                    columns,
+                    totalRows,
+                    resultTable,
+                    sampleRows,
+                    revision: Date.now(),
+                  },
+                  error: null,
+                }
+              : t,
+          ),
+        );
+      }
     } catch (e) {
       setQueryWorkspaceTabs((prev) =>
         prev.map((t) =>
@@ -467,9 +535,106 @@ export function CsvViewer() {
     );
   }, []);
 
+  const fetchQueryResultWindowForTab = useCallback(
+    async (tabId: string, start: number, end: number) => {
+      const tab = queryWorkspaceTabsRef.current.find((t) => t.id === tabId);
+      const result = tab?.result;
+      if (!result || end <= start) return [];
+      if (result.inlineRows) {
+        return result.inlineRows.slice(start, end);
+      }
+      const conn = connRef.current;
+      if (!conn || !result.resultTable) return [];
+      return fetchQueryResultWindow(
+        conn,
+        result.resultTable,
+        result.columns,
+        start,
+        end - start,
+      );
+    },
+    [],
+  );
+
+  const fetchQueryChartSeriesForTab = useCallback(
+    async (tabId: string, config: QueryChartConfig) => {
+      const tab = queryWorkspaceTabsRef.current.find((t) => t.id === tabId);
+      const result = tab?.result;
+      if (!result) return { error: "No query result." };
+      if (result.inlineRows) {
+        return { rows: result.inlineRows };
+      }
+      const conn = connRef.current;
+      if (!conn || !result.resultTable) {
+        return { error: "Database connection is not available." };
+      }
+      return fetchQueryChartSeries(conn, result.resultTable, config);
+    },
+    [],
+  );
+
+  const downloadQueryResultsForTab = useCallback(async (tabId: string) => {
+    const tab = queryWorkspaceTabsRef.current.find((t) => t.id === tabId);
+    const result = tab?.result;
+    if (!result || result.totalRows === 0) return;
+
+    const base =
+      tab?.label.replace(/[^\w.-]+/g, "_").replace(/^_|_$/g, "") ||
+      "query-results";
+    const total = result.totalRows;
+    /** Avoid modal flicker on small/fast exports (one chunk or less). */
+    const showProgressModal = total >= 1000;
+    setQueryDownloadBusy(true);
+    if (showProgressModal) {
+      setQueryDownloadProgress({ exported: 0, total });
+    }
+
+    try {
+      const parts: string[] = [queryResultCsvHeader(result.columns)];
+      let exported = 0;
+
+      if (result.inlineRows) {
+        parts.push(queryResultCsvBody(result.columns, result.inlineRows));
+        exported = result.inlineRows.length;
+        if (showProgressModal) {
+          setQueryDownloadProgress({ exported, total });
+        }
+      } else {
+        const conn = connRef.current;
+        if (!conn || !result.resultTable) {
+          throw new Error("Database connection is not available.");
+        }
+        while (exported < total) {
+          const batch = await fetchQueryResultWindow(
+            conn,
+            result.resultTable,
+            result.columns,
+            exported,
+            QUERY_RESULT_FETCH_CHUNK,
+          );
+          if (batch.length === 0) break;
+          parts.push(queryResultCsvBody(result.columns, batch));
+          exported += batch.length;
+          if (showProgressModal) {
+            setQueryDownloadProgress({ exported, total });
+          }
+        }
+      }
+
+      downloadCsvText(`${parts.join("\n")}\n`, `${base}.csv`);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setQueryDownloadProgress(null);
+      setQueryDownloadBusy(false);
+    }
+  }, []);
+
   const addQueryWorkspaceTab = useCallback(() => {
     const tableId = dataTableNameRef.current;
-    const sql = tableId ? `SELECT * FROM ${quoteIdent(tableId)}` : "";
+    const sql = tableId
+      ? `SELECT * FROM ${quoteIdent(tableId)} LIMIT 1000`
+      : "";
     const id = crypto.randomUUID();
     setQueryWorkspaceTabs((prev) => {
       const newTab: QueryWorkspaceTab = {
@@ -497,6 +662,11 @@ export function CsvViewer() {
     const prev = queryWorkspaceTabsRef.current;
     const active = queryWorkspaceActiveTabIdRef.current;
     if (prev.length <= 1) return;
+    const closing = prev.find((t) => t.id === id);
+    const conn = connRef.current;
+    if (conn && closing?.result?.resultTable) {
+      void dropQueryResultTable(conn, closing.result.resultTable);
+    }
     const idx = prev.findIndex((t) => t.id === id);
     const filtered = prev.filter((t) => t.id !== id);
     let nextActive = active;
@@ -827,7 +997,7 @@ export function CsvViewer() {
       const initialTab: QueryWorkspaceTab = {
         id: crypto.randomUUID(),
         label: "Query 1",
-        sql: `SELECT * FROM ${tableQuoted}`,
+        sql: `SELECT * FROM ${tableQuoted} LIMIT 1000`,
         result: null,
         error: null,
       };
@@ -1110,6 +1280,11 @@ export function CsvViewer() {
         runningTabId={queryWorkspaceRunningTabId}
         onRun={runQueryWorkspace}
         queryDataDisabled={status !== "ready"}
+        fetchResultWindow={fetchQueryResultWindowForTab}
+        fetchChartSeries={fetchQueryChartSeriesForTab}
+        downloadResults={downloadQueryResultsForTab}
+        downloadProgress={queryDownloadProgress}
+        downloadBusy={queryDownloadBusy}
       />
 
       <Dialog open={sortDetailsOpen} onOpenChange={setSortDetailsOpen}>

@@ -115,7 +115,15 @@ const Y_AGGREGATE_OPTIONS: { id: YValueAggregate; label: string }[] = [
 
 type Props = {
   columns: string[];
+  /** Sample rows for column typing / pickers. */
   rows: Record<string, unknown>[];
+  /**
+   * Pre-aggregated series from DuckDB. When provided, used for the plot
+   * instead of {@link rows}. When null, the plot waits (loading).
+   */
+  plotRows?: Record<string, unknown>[] | null;
+  /** When false, show a waiting state instead of plotting sample rows. */
+  seriesReady?: boolean;
   config: QueryChartConfig;
   onConfigChange: (next: QueryChartConfig) => void;
   /** Hide type/axis controls; plot only (docked preview). */
@@ -909,10 +917,14 @@ function PiePlot({
 export function SqlQueryResultsChart({
   columns,
   rows,
+  plotRows = undefined,
+  seriesReady = true,
   config,
   onConfigChange,
   variant = "full",
 }: Props) {
+  const plotSource =
+    plotRows !== undefined ? (seriesReady ? plotRows : null) : rows;
   /** Merge with defaults so no field is ever undefined (Base UI Select must stay controlled). */
   const cfg = useMemo((): QueryChartConfig => {
     return {
@@ -1042,6 +1054,10 @@ export function SqlQueryResultsChart({
           Choose a label column and a value column to draw the chart.
         </p>
       );
+    } else if (plotSource == null) {
+      body = (
+        <p className="text-muted-foreground text-sm">Loading chart data…</p>
+      );
     } else {
       body = (
         <PiePlot
@@ -1050,7 +1066,7 @@ export function SqlQueryResultsChart({
           labelCol={pieLabelColumn!}
           valueCol={pieValueColumn!}
           yAggregate={cfg.yAggregate}
-          rows={rows}
+          rows={plotSource}
         />
       );
     }
@@ -1059,6 +1075,10 @@ export function SqlQueryResultsChart({
       <p className="text-muted-foreground text-sm">
         Choose X and Y columns to draw the chart.
       </p>
+    );
+  } else if (plotSource == null) {
+    body = (
+      <p className="text-muted-foreground text-sm">Loading chart data…</p>
     );
   } else {
     body = (
@@ -1070,7 +1090,7 @@ export function SqlQueryResultsChart({
         yCol={yColumn!}
         yAggregate={cfg.yAggregate}
         showBestFitLine={kind === "scatter" && cfg.showBestFitLine}
-        rows={rows}
+        rows={plotSource}
       />
     );
   }

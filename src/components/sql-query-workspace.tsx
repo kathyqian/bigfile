@@ -40,11 +40,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { quoteIdent } from "@/lib/csv-query";
-import {
-  downloadCsvText,
-  queryResultToCsv,
-} from "@/lib/query-result-csv";
-import { QUERY_RESULT_ROW_LIMIT } from "@/lib/sql-guardrails";
 import { cn } from "@/lib/utils";
 
 import {
@@ -54,6 +49,7 @@ import {
   queryChartKindLabel,
   type QueryChartConfig,
 } from "@/components/sql-query-results-chart";
+import { QueryResultsGrid } from "@/components/query-results-grid";
 import {
   listNumericChartColumns,
   normalizeYAggregate,
@@ -61,7 +57,15 @@ import {
 
 export type QueryResultState = {
   columns: string[];
-  rows: Record<string, unknown>[];
+  totalRows: number;
+  /** DuckDB temp table; null for DESCRIBE/SHOW/EXPLAIN (uses {@link inlineRows}). */
+  resultTable: string | null;
+  /** Full rows for meta queries that are not materialized. */
+  inlineRows?: Record<string, unknown>[];
+  /** Sample for chart column pickers. */
+  sampleRows: Record<string, unknown>[];
+  /** Bumps on every successful run so the results grid remounts its window cache. */
+  revision: number;
 } | null;
 
 export type QueryWorkspaceTab = {
@@ -72,6 +76,11 @@ export type QueryWorkspaceTab = {
   result: QueryResultState;
   error: string | null;
 };
+
+export type QueryDownloadProgress = {
+  exported: number;
+  total: number;
+} | null;
 
 type SqlQueryWorkspaceProps = {
   open: boolean;
@@ -89,13 +98,21 @@ type SqlQueryWorkspaceProps = {
   runningTabId: string | null;
   onRun: () => void;
   queryDataDisabled?: boolean;
+  fetchResultWindow: (
+    tabId: string,
+    start: number,
+    end: number,
+  ) => Promise<Record<string, unknown>[]>;
+  fetchChartSeries: (
+    tabId: string,
+    config: QueryChartConfig,
+  ) => Promise<{ rows: Record<string, unknown>[] } | { error: string }>;
+  downloadResults: (tabId: string) => Promise<void>;
+  /** Non-null only when a progress modal should show (large exports). */
+  downloadProgress: QueryDownloadProgress;
+  /** True for any in-flight download (including small ones without a modal). */
+  downloadBusy: boolean;
 };
-
-function formatCell(v: unknown): string {
-  if (v === null || v === undefined) return "";
-  if (typeof v === "object") return JSON.stringify(v);
-  return String(v);
-}
 
 type DockedChart = {
   id: string;
@@ -163,6 +180,11 @@ export function SqlQueryWorkspace({
   runningTabId,
   onRun,
   queryDataDisabled,
+  fetchResultWindow,
+  fetchChartSeries,
+  downloadResults,
+  downloadProgress,
+  downloadBusy,
 }: SqlQueryWorkspaceProps) {
   const isMd = useMinWidthMd();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -182,6 +204,11 @@ export function SqlQueryWorkspace({
   >({});
   /** Config to put back on the dock if the user closes an expanded chart unfinished. */
   const restoreDockedOnCloseRef = useRef<DockedChart | null>(null);
+  const [chartSeriesRows, setChartSeriesRows] = useState<
+    Record<string, unknown>[] | null
+  >(null);
+  const [chartSeriesError, setChartSeriesError] = useState<string | null>(null);
+  const [chartSeriesLoading, setChartSeriesLoading] = useState(false);
 
   useEffect(() => {
     if (!open) {
@@ -239,10 +266,12 @@ export function SqlQueryWorkspace({
   const running =
     activeTabId != null && runningTabId === activeTabId;
 
+  const sampleRows = result?.sampleRows ?? [];
+
   const resultNumericColumns = useMemo(() => {
-    if (result == null || result.rows.length === 0) return new Set<string>();
-    return new Set(listNumericChartColumns(result.columns, result.rows));
-  }, [result]);
+    if (result == null || sampleRows.length === 0) return new Set<string>();
+    return new Set(listNumericChartColumns(result.columns, sampleRows));
+  }, [result, sampleRows]);
 
   const chartConfig = useMemo(
     () => sanitizeChartConfig(draftChartConfig, result),
@@ -250,12 +279,12 @@ export function SqlQueryWorkspace({
   );
 
   const chartReady = useMemo(() => {
-    if (result == null || result.rows.length === 0) return false;
-    return isQueryChartReady(chartConfig, result.columns, result.rows);
-  }, [chartConfig, result]);
+    if (result == null || result.totalRows === 0) return false;
+    return isQueryChartReady(chartConfig, result.columns, sampleRows);
+  }, [chartConfig, result, sampleRows]);
 
   const dockedCharts = useMemo(() => {
-    if (activeTabId == null || result == null || result.rows.length === 0) {
+    if (activeTabId == null || result == null || result.totalRows === 0) {
       return [];
     }
     return (dockedChartsByTabId[activeTabId] ?? [])
@@ -264,9 +293,42 @@ export function SqlQueryWorkspace({
         config: sanitizeChartConfig(chart.config, result),
       }))
       .filter((chart) =>
-        isQueryChartReady(chart.config, result.columns, result.rows),
+        isQueryChartReady(chart.config, result.columns, sampleRows),
       );
-  }, [activeTabId, dockedChartsByTabId, result]);
+  }, [activeTabId, dockedChartsByTabId, result, sampleRows]);
+
+  const fetchWindowForActive = useCallback(
+    (start: number, end: number) => {
+      if (activeTabId == null) return Promise.resolve([]);
+      return fetchResultWindow(activeTabId, start, end);
+    },
+    [activeTabId, fetchResultWindow],
+  );
+
+  useEffect(() => {
+    if (!chartModalOpen || activeTabId == null || !chartReady) {
+      setChartSeriesRows(null);
+      setChartSeriesError(null);
+      setChartSeriesLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setChartSeriesLoading(true);
+    setChartSeriesError(null);
+    void fetchChartSeries(activeTabId, chartConfig).then((res) => {
+      if (cancelled) return;
+      setChartSeriesLoading(false);
+      if ("error" in res) {
+        setChartSeriesError(res.error);
+        setChartSeriesRows([]);
+      } else {
+        setChartSeriesRows(res.rows);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [chartModalOpen, activeTabId, chartReady, chartConfig, fetchChartSeries]);
 
   /** Reopen a minimized chart. */
   const expandDockedChart = useCallback((chart: DockedChart) => {
@@ -347,15 +409,10 @@ export function SqlQueryWorkspace({
   );
 
   const downloadResultsCsv = useCallback(() => {
-    if (!result || result.rows.length === 0) return;
-    const base =
-      activeTab?.label.replace(/[^\w.-]+/g, "_").replace(/^_|_$/g, "") ||
-      "query-results";
-    downloadCsvText(
-      queryResultToCsv(result.columns, result.rows),
-      `${base}.csv`,
-    );
-  }, [activeTab?.label, result]);
+    if (!result || result.totalRows === 0 || activeTabId == null) return;
+    if (downloadBusy) return;
+    void downloadResults(activeTabId);
+  }, [activeTabId, downloadBusy, downloadResults, result]);
 
   const editorId =
     activeTabId != null
@@ -551,31 +608,25 @@ export function SqlQueryWorkspace({
                         >
                           Editor
                         </label>
-                        <div className="flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-x-3 gap-y-2">
-                          <span className="font-normal">
-                            Max {QUERY_RESULT_ROW_LIMIT.toLocaleString()} rows
-                            for SELECT and WITH
-                          </span>
-                          <Tooltip>
-                            <TooltipTrigger
-                              delay={0}
-                              render={
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  className="shrink-0 gap-1.5"
-                                  disabled={queryDataDisabled || running}
-                                  onClick={() => onRun()}
-                                  aria-label="Run query"
-                                />
-                              }
-                            >
-                              <Play className="size-3.5 fill-current" />
-                              Run Query
-                            </TooltipTrigger>
-                            <TooltipContent>⌘↵ / Ctrl+Enter</TooltipContent>
-                          </Tooltip>
-                        </div>
+                        <Tooltip>
+                          <TooltipTrigger
+                            delay={0}
+                            render={
+                              <Button
+                                type="button"
+                                size="sm"
+                                className="shrink-0 gap-1.5"
+                                disabled={queryDataDisabled || running}
+                                onClick={() => onRun()}
+                                aria-label="Run query"
+                              />
+                            }
+                          >
+                            <Play className="size-3.5 fill-current" />
+                            Run Query
+                          </TooltipTrigger>
+                          <TooltipContent>⌘↵ / Ctrl+Enter</TooltipContent>
+                        </Tooltip>
                       </div>
                       <div className="flex min-h-0 flex-1 flex-col px-4 pb-4">
                         <textarea
@@ -593,7 +644,7 @@ export function SqlQueryWorkspace({
                           )}
                           placeholder={
                             tableIdentifier
-                              ? `SELECT * FROM ${quoteIdent(tableIdentifier)}`
+                              ? `SELECT * FROM ${quoteIdent(tableIdentifier)} LIMIT 1000`
                               : "SELECT …"
                           }
                           disabled={queryDataDisabled}
@@ -610,25 +661,26 @@ export function SqlQueryWorkspace({
                     className="min-h-0"
                   >
                     <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-[color-mix(in_oklab,var(--muted)_12%,transparent)]">
-                  <div className="text-muted-foreground flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3 text-xs">
+                  <div className="text-muted-foreground flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border px-4 py-3 text-xs">
                     <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
                       <span className="text-foreground font-medium uppercase tracking-[0.14em]">
                         Results
                       </span>
                       {result ? (
                         <span className="max-w-full font-normal wrap-break-word">
-                          {result.rows.length.toLocaleString()}{" "}
-                          {result.rows.length === 1 ? "row" : "rows"}
+                          {result.totalRows.toLocaleString()}{" "}
+                          {result.totalRows === 1 ? "row" : "rows"}
                         </span>
                       ) : null}
                     </div>
-                    {result && result.rows.length > 0 ? (
+                    {result && result.totalRows > 0 ? (
                       <div className="flex shrink-0 flex-wrap items-center gap-2">
                         <Button
                           type="button"
                           variant="outline"
                           size="sm"
                           className="gap-1.5"
+                          disabled={downloadBusy}
                           onClick={downloadResultsCsv}
                         >
                           <Download className="size-3.5" />
@@ -654,7 +706,7 @@ export function SqlQueryWorkspace({
                       {error}
                     </div>
                   ) : null}
-                  <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-0 pb-3 md:pb-4">
+                  <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                     {running ? (
                       <p
                         className="text-muted-foreground border-border/60 bg-muted/40 border-b px-4 py-2 text-xs"
@@ -668,59 +720,19 @@ export function SqlQueryWorkspace({
                         Run a query to see results here.
                       </p>
                     ) : null}
-                    {result && result.rows.length === 0 && !error && !running ? (
+                    {result && result.totalRows === 0 && !error && !running ? (
                       <p className="text-muted-foreground px-4 py-6 text-sm">
                         No rows returned.
                       </p>
                     ) : null}
-                    {result && result.rows.length > 0 ? (
-                      <ScrollArea className="h-full min-h-0">
-                        <div className="inline-block min-w-full align-middle">
-                          <table className="w-full min-w-[640px] border-separate border-spacing-0 text-xs">
-                            <thead>
-                              <tr>
-                                {result.columns.map((col) => (
-                                  <th
-                                    key={col}
-                                    className={cn(
-                                      "bg-muted text-foreground sticky top-0 z-10 max-w-56 truncate px-4 py-2 font-mono text-xs font-medium whitespace-nowrap shadow-[inset_0_1px_0_0_var(--border),inset_0_-1px_0_0_var(--border)]",
-                                      resultNumericColumns.has(col)
-                                        ? "text-right"
-                                        : "text-left",
-                                    )}
-                                    title={col}
-                                  >
-                                    {col}
-                                  </th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {result.rows.map((row, ri) => (
-                                <tr
-                                  key={ri}
-                                  className="odd:bg-background/40 even:bg-background/70"
-                                >
-                                  {result.columns.map((col) => (
-                                    <td
-                                      key={col}
-                                      className={cn(
-                                        "text-foreground border-border/80 max-w-56 truncate border-b px-4 py-2 font-mono text-xs tabular-nums whitespace-nowrap",
-                                        resultNumericColumns.has(col)
-                                          ? "text-right"
-                                          : "text-left",
-                                      )}
-                                      title={formatCell(row[col])}
-                                    >
-                                      {formatCell(row[col])}
-                                    </td>
-                                  ))}
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </ScrollArea>
+                    {result && result.totalRows > 0 ? (
+                      <QueryResultsGrid
+                        resultKey={`${activeTabId ?? ""}:${result.resultTable ?? "inline"}:${result.revision}`}
+                        columns={result.columns}
+                        totalRows={result.totalRows}
+                        numericColumns={resultNumericColumns}
+                        fetchWindow={fetchWindowForActive}
+                      />
                     ) : null}
                     {dockedCharts.length > 0 && result ? (
                       <div
@@ -764,7 +776,7 @@ export function SqlQueryWorkspace({
 
     <Dialog
       open={
-        open && chartModalOpen && result != null && result.rows.length > 0
+        open && chartModalOpen && result != null && result.totalRows > 0
       }
       onOpenChange={handleChartOpenChange}
     >
@@ -804,16 +816,78 @@ export function SqlQueryWorkspace({
             <X className="size-3.5" />
           </Button>
         </div>
-        {result && result.rows.length > 0 && activeTabId != null ? (
+        {result && result.totalRows > 0 && activeTabId != null ? (
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden pt-3">
+            {chartSeriesError ? (
+              <p className="text-destructive px-4 text-sm" role="alert">
+                {chartSeriesError}
+              </p>
+            ) : null}
+            {chartSeriesLoading ? (
+              <p className="text-muted-foreground px-4 text-sm">Loading chart…</p>
+            ) : null}
             <SqlQueryResultsChart
               columns={result.columns}
-              rows={result.rows}
+              rows={sampleRows}
+              plotRows={chartSeriesRows}
+              seriesReady={chartSeriesRows != null && !chartSeriesLoading}
               config={chartConfig}
               onConfigChange={handleDraftChartConfigChange}
             />
           </div>
         ) : null}
+      </DialogContent>
+    </Dialog>
+
+    <Dialog
+      open={downloadProgress != null}
+      onOpenChange={(next) => {
+        if (!next && downloadProgress != null) {
+          /* Block dismiss while download runs — parent clears progress when done. */
+        }
+      }}
+    >
+      <DialogContent
+        showCloseButton={false}
+        className="sm:max-w-sm"
+        overlayClassName="z-[70]"
+      >
+        <DialogHeader>
+          <DialogTitle>Downloading results…</DialogTitle>
+          <DialogDescription>
+            {downloadProgress
+              ? `${downloadProgress.exported.toLocaleString()} of ${downloadProgress.total.toLocaleString()} rows`
+              : "Preparing download…"}
+          </DialogDescription>
+        </DialogHeader>
+        <div
+          className="bg-muted h-1 w-full overflow-hidden rounded-lg"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={
+            downloadProgress && downloadProgress.total > 0
+              ? Math.round(
+                  (100 * downloadProgress.exported) / downloadProgress.total,
+                )
+              : 0
+          }
+          aria-label="Download progress"
+        >
+          <div
+            className="bg-primary h-full rounded-lg transition-[width] duration-150"
+            style={{
+              width:
+                downloadProgress && downloadProgress.total > 0
+                  ? `${Math.min(
+                      100,
+                      (100 * downloadProgress.exported) /
+                        downloadProgress.total,
+                    )}%`
+                  : "0%",
+            }}
+          />
+        </div>
       </DialogContent>
     </Dialog>
     </>

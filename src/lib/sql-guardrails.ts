@@ -1,6 +1,3 @@
-/** Max rows returned for SELECT / WITH queries (outer LIMIT). */
-export const QUERY_RESULT_ROW_LIMIT = 1000;
-
 function stripLeadingNoise(s: string): string {
   let t = s.trimStart();
   while (true) {
@@ -27,12 +24,12 @@ function firstKeyword(working: string): string | null {
 }
 
 /**
- * Validates read-only SQL and applies a row cap to SELECT / WITH via a subquery wrapper.
+ * Validates read-only SQL. SELECT / WITH are returned unchanged (no row cap).
  * DESCRIBE, SHOW, and EXPLAIN are passed through unchanged.
  */
 export function prepareReadOnlyQuery(
   sql: string,
-): { sql: string } | { error: string } {
+): { sql: string; kind: "select" | "meta" } | { error: string } {
   const trimmed = sql.trim();
   if (!trimmed) return { error: "Query is empty." };
 
@@ -71,13 +68,11 @@ export function prepareReadOnlyQuery(
   }
 
   if (kw === "DESCRIBE" || kw === "SHOW" || kw === "EXPLAIN") {
-    return { sql: stmt };
+    return { sql: stmt, kind: "meta" };
   }
 
   if (kw === "WITH" || kw === "SELECT") {
-    return {
-      sql: `SELECT * FROM (${stmt}) AS _bf_sub LIMIT ${QUERY_RESULT_ROW_LIMIT}`,
-    };
+    return { sql: stmt, kind: "select" };
   }
 
   return {
