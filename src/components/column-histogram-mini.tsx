@@ -11,7 +11,6 @@ import { Bar } from "@visx/shape";
 import { scaleBand, scaleLinear } from "@visx/scale";
 
 import {
-  MAX_CATEGORICAL_HISTOGRAM_VALUES,
   NUMERIC_BINS,
   type ColumnHistogramData,
 } from "@/lib/column-histogram";
@@ -26,8 +25,8 @@ type Props = {
 type HistogramTooltipState = {
   clientX: number;
   clientY: number;
-  title: string;
-  lines: string[];
+  label: string;
+  detail: string;
 };
 
 function formatHistogramNumber(n: number): string {
@@ -53,22 +52,20 @@ function numericBinRangeLabel(
   return `${formatHistogramNumber(start)} – ${formatHistogramNumber(end)}`;
 }
 
+function tipDetail(count: number, totalNonNull: number): string {
+  const pct = totalNonNull > 0 ? (100 * count) / totalNonNull : 0;
+  const rows = count === 1 ? "1 row" : `${count.toLocaleString()} rows`;
+  return `${rows} (${pct.toFixed(1)}%)`;
+}
+
 function buildNumericTip(
   data: Extract<ColumnHistogramData, { kind: "numeric" }>,
   binIndex: number,
   count: number,
-): { title: string; lines: string[] } {
-  const { min, max, totalNonNull } = data;
-  const pct =
-    totalNonNull > 0 ? (100 * count) / totalNonNull : 0;
-  const range = numericBinRangeLabel(min, max, binIndex, NUMERIC_BINS);
+): { label: string; detail: string } {
   return {
-    title: `Bin ${binIndex + 1} of ${NUMERIC_BINS}`,
-    lines: [
-      `Range: ${range}`,
-      `Rows: ${count.toLocaleString()}`,
-      `Share of non-null values in this column: ${pct.toFixed(1)}%`,
-    ],
+    label: numericBinRangeLabel(data.min, data.max, binIndex, NUMERIC_BINS),
+    detail: tipDetail(count, data.totalNonNull),
   };
 }
 
@@ -76,29 +73,11 @@ function buildCategoricalTip(
   data: Extract<ColumnHistogramData, { kind: "categorical" }>,
   i: number,
   count: number,
-): { title: string; lines: string[] } {
+): { label: string; detail: string } {
   const raw = data.labels[i] ?? "";
-  const pct =
-    data.totalNonNull > 0 ? (100 * count) / data.totalNonNull : 0;
-
-  if (raw === "Other") {
-    return {
-      title: "All other distinct values",
-      lines: [
-        `Rows whose value is not among the ${MAX_CATEGORICAL_HISTOGRAM_VALUES.toLocaleString()} most frequent distinct values in this column.`,
-        `Rows: ${count.toLocaleString()}`,
-        `Share of non-null values in this column: ${pct.toFixed(1)}%`,
-      ],
-    };
-  }
-
   return {
-    title: raw ? raw : "(empty string)",
-    lines: [
-      `Bar ${i + 1} of ${data.labels.length} in this chart (top ${MAX_CATEGORICAL_HISTOGRAM_VALUES.toLocaleString()} values by frequency, then value)`,
-      `Rows: ${count.toLocaleString()}`,
-      `Share of non-null values in this column: ${pct.toFixed(1)}%`,
-    ],
+    label: raw === "Other" ? "Other" : raw ? raw : "(empty string)",
+    detail: tipDetail(count, data.totalNonNull),
   };
 }
 
@@ -114,12 +93,10 @@ function HistogramTooltip({ tip }: { tip: HistogramTooltipState | null }) {
         top: tip.clientY + 12,
       }}
     >
-      <div className="text-foreground font-medium wrap-break-word">{tip.title}</div>
-      <ul className="text-muted-foreground mt-1 list-none space-y-0.5 pl-0">
-        {tip.lines.map((line, i) => (
-          <li key={i}>{line}</li>
-        ))}
-      </ul>
+      <div className="text-foreground font-medium wrap-break-word">{tip.label}</div>
+      <div className="text-muted-foreground mt-0.5 font-mono tabular-nums">
+        {tip.detail}
+      </div>
     </div>
   );
 
@@ -162,8 +139,8 @@ function Bars({
     onTipChange({
       clientX,
       clientY,
-      title: payload.title,
-      lines: payload.lines,
+      label: payload.label,
+      detail: payload.detail,
     });
   };
 
@@ -180,8 +157,8 @@ function Bars({
     onTipChange({
       clientX,
       clientY,
-      title: payload.title,
-      lines: payload.lines,
+      label: payload.label,
+      detail: payload.detail,
     });
   };
 
