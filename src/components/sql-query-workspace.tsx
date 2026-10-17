@@ -530,9 +530,9 @@ export function SqlQueryWorkspace({
                     minSize="22%"
                     className="min-h-0"
                   >
-                    <div className="bg-muted/15 flex h-full min-h-0 flex-col border-t-0 p-4">
-                      <div className="mb-2 flex min-w-0 shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2">
-                        <div className="text-muted-foreground flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1 text-xs">
+                    <div className="bg-muted/15 flex h-full min-h-0 flex-col border-t-0">
+                      <div className="text-muted-foreground flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3 text-xs">
+                        <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
                           <label
                             htmlFor={editorId}
                             className="text-foreground shrink-0 font-medium uppercase tracking-[0.14em]"
@@ -545,7 +545,7 @@ export function SqlQueryWorkspace({
                           </span>
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
-                          <span className="text-muted-foreground hidden text-xs sm:inline">
+                          <span className="hidden text-xs sm:inline">
                             ⌘↵ / Ctrl+Enter
                           </span>
                           <Button
@@ -561,26 +561,28 @@ export function SqlQueryWorkspace({
                           </Button>
                         </div>
                       </div>
-                      <textarea
-                        key={activeTabId ?? "none"}
-                        ref={textareaRef}
-                        id={editorId}
-                        value={sql}
-                        onChange={(e) => onSqlChange(e.target.value)}
-                        onKeyDown={handleKeyDown}
-                        spellCheck={false}
-                        className={cn(
-                          "border-input bg-background text-foreground placeholder:text-muted-foreground",
-                          "focus-visible:ring-ring min-h-0 w-full min-w-0 flex-1 resize-none rounded-lg border p-3 font-mono text-xs leading-relaxed",
-                          "focus-visible:ring-[3px] focus-visible:ring-offset-2 focus-visible:outline-none",
-                        )}
-                        placeholder={
-                          tableIdentifier
-                            ? `SELECT * FROM ${quoteIdent(tableIdentifier)}`
-                            : "SELECT …"
-                        }
-                        disabled={queryDataDisabled}
-                      />
+                      <div className="flex min-h-0 flex-1 flex-col px-4 pb-4">
+                        <textarea
+                          key={activeTabId ?? "none"}
+                          ref={textareaRef}
+                          id={editorId}
+                          value={sql}
+                          onChange={(e) => onSqlChange(e.target.value)}
+                          onKeyDown={handleKeyDown}
+                          spellCheck={false}
+                          className={cn(
+                            "border-input bg-background text-foreground placeholder:text-muted-foreground",
+                            "focus-visible:ring-ring min-h-0 w-full min-w-0 flex-1 resize-none rounded-lg border p-3 font-mono text-xs leading-relaxed",
+                            "focus-visible:ring-[3px] focus-visible:ring-offset-2 focus-visible:outline-none",
+                          )}
+                          placeholder={
+                            tableIdentifier
+                              ? `SELECT * FROM ${quoteIdent(tableIdentifier)}`
+                              : "SELECT …"
+                          }
+                          disabled={queryDataDisabled}
+                        />
+                      </div>
                     </div>
                   </ResizablePanel>
 

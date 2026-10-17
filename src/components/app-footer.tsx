@@ -1,3 +1,5 @@
+import { SquareTerminal } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -48,7 +50,7 @@ export function AppFooter({
         className,
       )}
     >
-      <div className="flex w-full min-w-0 items-center justify-between gap-3 px-4 py-3">
+      <div className="flex h-12 w-full min-w-0 items-center justify-between gap-3 px-4">
         <div className="min-w-0 flex-1">
         {loadError ? (
           "Load failed — see message above"
@@ -146,10 +148,11 @@ export function AppFooter({
           <Button
             type="button"
             size="sm"
-            className="shrink-0"
+            className="shrink-0 gap-1.5"
             disabled={queryDataDisabled}
             onClick={onQueryDataClick}
           >
+            <SquareTerminal className="size-3.5" />
             Query Data
           </Button>
         ) : null}
