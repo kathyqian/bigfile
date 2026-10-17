@@ -936,12 +936,12 @@ export function CsvViewer() {
               <div className="flex w-full max-w-56 flex-col items-center gap-3">
                 <p className="text-muted-foreground text-sm">Loading...</p>
                 <div
-                  className="bg-muted h-2.5 w-full overflow-hidden rounded-full"
+                  className="bg-muted h-1 w-full overflow-hidden rounded-lg"
                   role="progressbar"
                   aria-busy="true"
                   aria-label="Loading"
                 >
-                  <div className="bg-primary loading-bar-indeterminate h-full w-1/3 rounded-full" />
+                  <div className="bg-primary loading-bar-indeterminate h-full w-1/3 rounded-lg" />
                 </div>
               </div>
             </div>
