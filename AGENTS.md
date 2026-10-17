@@ -29,7 +29,7 @@ Chart tick labels may be `text-[11px] font-mono` in `text-muted-foreground` / `f
 
 ## Color
 
-Light is the default (`:root`). Dark is the `.dark` class on `<html>`, set only by the theme toggle (`next-themes`, `defaultTheme="light"`, `enableSystem={false}`). Do not put `dark` on the server markup.
+Light is `:root`; dark is the `.dark` class on `<html>`, managed by `next-themes` (`defaultTheme="system"`, `enableSystem`). The theme toggle overrides with an explicit light/dark preference. Do not put `dark` on the server markup.
 
 Stone palette:
 
