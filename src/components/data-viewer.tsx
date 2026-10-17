@@ -19,6 +19,7 @@ import {
   type RenderHeaderCellProps,
 } from "react-data-grid";
 import "react-data-grid/lib/styles.css";
+import { FileUp } from "lucide-react";
 
 import { DataColumnHeader } from "@/components/data-column-header";
 import { AppFooter } from "@/components/app-footer";
@@ -1158,11 +1159,17 @@ export function DataViewer() {
                     <EmptyTitle>Open a Data File</EmptyTitle>
                     <EmptyDescription className="text-foreground/80">
                       Drag and drop a file here, or choose one to load. Accepts{" "}
-                      {ACCEPTED_FILE_HELP}. Data stays in your browser and is
-                      processed locally.
+                      {ACCEPTED_FILE_HELP}. Data is processed locally and never
+                      leaves your browser.
                     </EmptyDescription>
                   </EmptyHeader>
-                  <Button type="button" variant="default" onClick={openFile}>
+                  <Button
+                    type="button"
+                    variant="default"
+                    className="gap-1.5"
+                    onClick={openFile}
+                  >
+                    <FileUp className="size-3.5" />
                     Choose File
                   </Button>
                 </Empty>
