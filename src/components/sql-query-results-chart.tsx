@@ -122,7 +122,57 @@ type Props = {
   variant?: "full" | "preview";
 };
 
-const M = { top: 12, right: 16, bottom: 40, left: 52 };
+/** Plot margins — leave room for tick labels plus axis titles (column names). */
+const M = { top: 12, right: 16, bottom: 56, left: 68 };
+
+function truncateAxisLabel(label: string, max = 36): string {
+  if (label.length <= max) return label;
+  return `${label.slice(0, Math.max(1, max - 1))}…`;
+}
+
+function AxisTitleX({
+  label,
+  x,
+  y,
+}: {
+  label: string;
+  x: number;
+  y: number;
+}) {
+  return (
+    <text
+      x={x}
+      y={y}
+      textAnchor="middle"
+      className="fill-muted-foreground text-xs"
+    >
+      {truncateAxisLabel(label)}
+    </text>
+  );
+}
+
+function AxisTitleY({
+  label,
+  x,
+  y,
+}: {
+  label: string;
+  x: number;
+  y: number;
+}) {
+  return (
+    <text
+      x={x}
+      y={y}
+      textAnchor="middle"
+      dominantBaseline="middle"
+      transform={`rotate(-90 ${x} ${y})`}
+      className="fill-muted-foreground text-xs"
+    >
+      {truncateAxisLabel(label)}
+    </text>
+  );
+}
 
 const CHART_KINDS: { id: QueryChartKind; label: string }[] = [
   { id: "scatter", label: "Scatter" },
@@ -520,7 +570,7 @@ function CartesianPlot({
                 <text
                   key={cat}
                   x={cx}
-                  y={innerH + 22}
+                  y={innerH + 18}
                   textAnchor="middle"
                   className="fill-muted-foreground max-w-[120px] truncate font-mono text-[11px]"
                 >
@@ -528,6 +578,8 @@ function CartesianPlot({
                 </text>
               );
             })}
+            <AxisTitleX label={xCol} x={innerW / 2} y={innerH + 40} />
+            <AxisTitleY label={yCol} x={-50} y={innerH / 2} />
           </g>
         </svg>
       );
@@ -621,6 +673,8 @@ function CartesianPlot({
           />
           <AxisTicksY scale={yScale} x={0} percent={yIsPercent} />
           <AxisTicksX scale={xScale} y={innerH} percent={xIsPercent} />
+          <AxisTitleX label={xCol} x={innerW / 2} y={innerH + 40} />
+          <AxisTitleY label={yCol} x={-50} y={innerH / 2} />
           {kind === "scatter"
             ? scaled.map((p, i) => (
                 <circle
@@ -690,7 +744,11 @@ function CartesianPlot({
     points,
     showBestFitLine,
     width,
+    xCol,
     xDomainCat,
+    xIsPercent,
+    yCol,
+    yIsPercent,
   ]);
 
   const hint =
