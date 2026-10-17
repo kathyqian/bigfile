@@ -134,7 +134,9 @@
   --rdg-background-color: var(--background);
   --rdg-header-background-color: var(--muted);
   --rdg-row-hover-background-color: var(--accent);
-  --rdg-selection-color: color-mix(in oklch, var(--ring) 35%, transparent);
+  /* No click/selection ring on cells (preview + query results). */
+  --rdg-selection-color: transparent;
+  --rdg-selection-width: 0px;
   --rdg-border-color: var(--border);
   --rdg-summary-border-color: var(--border);
   --rdg-color: var(--foreground);
@@ -153,6 +155,11 @@
    the top bar border-b and footer border-t. Cells keep their own borders. */
 .rdg-wrap .rdg-theme.rdg-fill-grid {
   border: none !important;
+}
+
+.rdg-wrap .rdg-cell[aria-selected="true"] {
+  outline: none;
+  box-shadow: none;
 }
 
 .rdg-wrap .rdg-cell {
