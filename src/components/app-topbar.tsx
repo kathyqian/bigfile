@@ -1,23 +1,15 @@
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 type AppTopBarProps = {
   fileLabel: string | null;
   hasSpreadsheet: boolean;
-  /** When false (e.g. empty drop zone), upload lives only in the main content */
-  showOpenFileButton?: boolean;
-  openFileDisabled?: boolean;
-  onOpenFile: () => void;
   className?: string;
 };
 
 export function AppTopBar({
   fileLabel,
   hasSpreadsheet,
-  showOpenFileButton = true,
-  openFileDisabled,
-  onOpenFile,
   className,
 }: AppTopBarProps) {
   return (
@@ -38,17 +30,6 @@ export function AppTopBar({
           >
             {fileLabel}
           </span>
-        ) : null}
-        {showOpenFileButton && !hasSpreadsheet ? (
-          <Button
-            type="button"
-            variant="default"
-            size="sm"
-            disabled={openFileDisabled}
-            onClick={onOpenFile}
-          >
-            Choose File
-          </Button>
         ) : null}
         <ThemeToggle />
       </div>

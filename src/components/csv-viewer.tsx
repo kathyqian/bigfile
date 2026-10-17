@@ -1091,8 +1091,6 @@ export function CsvViewer() {
   const openFile = () => fileInputRef.current?.click();
 
   const hasSpreadsheet = status === "ready";
-  const topBarDisabled = status === "init-db";
-  const isEmptyChrome = status === "idle" || status === "init-db";
 
   const activeFilterCount = countActiveColumnFilters(filters, columnMetaMap);
   const activeFilterLines = useMemo(
@@ -1114,13 +1112,7 @@ export function CsvViewer() {
         onChange={onBrowse}
       />
 
-      <AppTopBar
-        fileLabel={fileLabel}
-        hasSpreadsheet={hasSpreadsheet}
-        showOpenFileButton={!isEmptyChrome}
-        openFileDisabled={topBarDisabled}
-        onOpenFile={openFile}
-      />
+      <AppTopBar fileLabel={fileLabel} hasSpreadsheet={hasSpreadsheet} />
 
       <div
         className={cn(
