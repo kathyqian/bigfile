@@ -47,7 +47,7 @@ export function AppTopBar({
             disabled={openFileDisabled}
             onClick={onOpenFile}
           >
-            Choose CSV
+            Choose File
           </Button>
         ) : null}
         <ThemeToggle />

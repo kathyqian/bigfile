@@ -44,6 +44,14 @@ import {
 import { prepareReadOnlyQuery } from "@/lib/sql-guardrails";
 import { tableIdentifierFromFileName } from "@/lib/csv-table-name";
 import {
+  ACCEPTED_FILE_HELP,
+  ACCEPTED_FILE_INPUT,
+  detectDataFileKind,
+  duckdbReadSourceSql,
+  isSupportedDataFile,
+  registeredUploadName,
+} from "@/lib/data-file-format";
+import {
   dropQueryResultTable,
   fetchQueryResultWindow,
   materializeQueryResult,
@@ -89,7 +97,6 @@ import {
 } from "@/components/sql-query-workspace";
 import type { QueryChartConfig } from "@/components/sql-query-results-chart";
 
-const REGISTERED_NAME = "upload.csv";
 /** Grid-only; avoids colliding with a CSV column named "row" or similar. */
 const ROW_NUM_KEY = "__rdg_rn__";
 const ROW_HEIGHT = 35;
@@ -981,6 +988,12 @@ export function CsvViewer() {
       setError("Database is not ready yet.");
       return;
     }
+    const kind = detectDataFileKind(file);
+    if (kind == null) {
+      setError(`Unsupported file type. Please choose ${ACCEPTED_FILE_HELP}.`);
+      setStatus("error");
+      return;
+    }
     setStatus("loading");
     try {
       setQueryWorkspaceOpen(false);
@@ -1005,7 +1018,8 @@ export function CsvViewer() {
 
       const buf = await file.arrayBuffer();
       const db = duckRef.current.db;
-      await db.registerFileBuffer(REGISTERED_NAME, new Uint8Array(buf));
+      const registeredName = registeredUploadName(file);
+      await db.registerFileBuffer(registeredName, new Uint8Array(buf));
 
       const conn = await db.connect();
       connRef.current = conn;
@@ -1024,9 +1038,10 @@ export function CsvViewer() {
       setQueryWorkspaceTabs([initialTab]);
       setQueryWorkspaceActiveTabId(initialTab.id);
 
+      const source = duckdbReadSourceSql(registeredName, kind);
       await conn.query(`
         CREATE OR REPLACE TABLE ${tableQuoted} AS
-        SELECT * FROM read_csv_auto('${REGISTERED_NAME}');
+        SELECT * FROM ${source};
       `);
 
       const meta = await fetchTableColumnMeta(conn, tableId);
@@ -1058,9 +1073,13 @@ export function CsvViewer() {
     e.preventDefault();
     setIsDragging(false);
     const f = e.dataTransfer.files[0];
-    if (f && (f.name.endsWith(".csv") || f.type === "text/csv")) {
+    if (!f) return;
+    if (isSupportedDataFile(f)) {
       void ingestFile(f);
+      return;
     }
+    setError(`Unsupported file type. Please choose ${ACCEPTED_FILE_HELP}.`);
+    setStatus("error");
   };
 
   const onBrowse = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1090,7 +1109,7 @@ export function CsvViewer() {
       <input
         ref={fileInputRef}
         type="file"
-        accept=".csv,text/csv"
+        accept={ACCEPTED_FILE_INPUT}
         className="hidden"
         onChange={onBrowse}
       />
@@ -1142,14 +1161,15 @@ export function CsvViewer() {
               <div className="w-full max-w-md shrink-0">
                 <Empty className="border-border border border-dashed">
                   <EmptyHeader>
-                    <EmptyTitle>Open a CSV</EmptyTitle>
+                    <EmptyTitle>Open a File</EmptyTitle>
                     <EmptyDescription className="text-foreground/80">
-                      Drag and drop a .csv file here, or choose a file to load.
-                      Data stays in your browser and is processed locally.
+                      Drag and drop a file here, or choose one to load. Accepts{" "}
+                      {ACCEPTED_FILE_HELP}. Data stays in your browser and is
+                      processed locally.
                     </EmptyDescription>
                   </EmptyHeader>
                   <Button type="button" variant="default" onClick={openFile}>
-                    Choose CSV
+                    Choose File
                   </Button>
                 </Empty>
               </div>

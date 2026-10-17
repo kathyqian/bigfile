@@ -55,7 +55,7 @@ export function AppFooter({
         {loadError ? (
           "Load failed — see message above"
         ) : importing ? (
-          "Importing CSV…"
+          "Importing…"
         ) : showRowStats ? (
           <>
             {activeFilterCount > 0 ? (
