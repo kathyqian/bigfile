@@ -39,7 +39,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { quoteIdent } from "@/lib/csv-query";
+import { defaultSelectAllSql } from "@/lib/csv-query";
+import { SqlCodeEditor } from "@/components/sql-code-editor";
 import { cn } from "@/lib/utils";
 
 import {
@@ -187,7 +188,6 @@ export function SqlQueryWorkspace({
   downloadBusy,
 }: SqlQueryWorkspaceProps) {
   const isMd = useMinWidthMd();
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const skipBlurCommitRef = useRef(false);
   const [editingTabId, setEditingTabId] = useState<string | null>(null);
@@ -397,17 +397,6 @@ export function SqlQueryWorkspace({
     });
   }, []);
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (queryDataDisabled || running) return;
-      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        onRun();
-      }
-    },
-    [onRun, queryDataDisabled, running],
-  );
-
   const downloadResultsCsv = useCallback(() => {
     if (!result || result.totalRows === 0 || activeTabId == null) return;
     if (downloadBusy) return;
@@ -602,12 +591,9 @@ export function SqlQueryWorkspace({
                   >
                     <div className="bg-muted/15 flex h-full min-h-0 flex-col border-t-0">
                       <div className="text-muted-foreground flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3 text-xs">
-                        <label
-                          htmlFor={editorId}
-                          className="text-foreground shrink-0 font-medium uppercase tracking-[0.14em]"
-                        >
+                        <span className="text-foreground shrink-0 font-medium uppercase tracking-[0.14em]">
                           Editor
-                        </label>
+                        </span>
                         <Tooltip>
                           <TooltipTrigger
                             delay={0}
@@ -629,22 +615,17 @@ export function SqlQueryWorkspace({
                         </Tooltip>
                       </div>
                       <div className="flex min-h-0 flex-1 flex-col px-4 pb-4">
-                        <textarea
+                        <SqlCodeEditor
                           key={activeTabId ?? "none"}
-                          ref={textareaRef}
                           id={editorId}
                           value={sql}
-                          onChange={(e) => onSqlChange(e.target.value)}
-                          onKeyDown={handleKeyDown}
-                          spellCheck={false}
-                          className={cn(
-                            "border-input bg-background text-foreground placeholder:text-muted-foreground",
-                            "focus-visible:ring-ring min-h-0 w-full min-w-0 flex-1 resize-none rounded-lg border p-3 font-mono text-xs leading-relaxed",
-                            "focus-visible:ring-[3px] focus-visible:ring-offset-2 focus-visible:outline-none",
-                          )}
+                          onChange={onSqlChange}
+                          onRun={
+                            queryDataDisabled || running ? undefined : onRun
+                          }
                           placeholder={
                             tableIdentifier
-                              ? `SELECT * FROM ${quoteIdent(tableIdentifier)} LIMIT 1000`
+                              ? defaultSelectAllSql(tableIdentifier)
                               : "SELECT …"
                           }
                           disabled={queryDataDisabled}

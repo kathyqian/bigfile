@@ -34,6 +34,7 @@ import {
   type ColumnFilter,
   type FiltersMap,
   countActiveColumnFilters,
+  defaultSelectAllSql,
   listActiveFilterLines,
   listSortDetails,
   quoteIdent,
@@ -632,9 +633,7 @@ export function CsvViewer() {
 
   const addQueryWorkspaceTab = useCallback(() => {
     const tableId = dataTableNameRef.current;
-    const sql = tableId
-      ? `SELECT * FROM ${quoteIdent(tableId)} LIMIT 1000`
-      : "";
+    const sql = tableId ? defaultSelectAllSql(tableId) : "";
     const id = crypto.randomUUID();
     setQueryWorkspaceTabs((prev) => {
       const newTab: QueryWorkspaceTab = {
@@ -997,7 +996,7 @@ export function CsvViewer() {
       const initialTab: QueryWorkspaceTab = {
         id: crypto.randomUUID(),
         label: "Query 1",
-        sql: `SELECT * FROM ${tableQuoted} LIMIT 1000`,
+        sql: defaultSelectAllSql(tableId),
         result: null,
         error: null,
       };

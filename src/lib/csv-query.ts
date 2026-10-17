@@ -37,6 +37,11 @@ export function quoteIdent(name: string): string {
   return `"${name.replace(/"/g, '""')}"`;
 }
 
+/** Default starter query for the SQL workspace (pretty-printed). */
+export function defaultSelectAllSql(tableName: string): string {
+  return `SELECT *\nFROM ${quoteIdent(tableName)}\nLIMIT 1000`;
+}
+
 export function escapeStringLiteral(s: string): string {
   return `'${s.replace(/'/g, "''")}'`;
 }
