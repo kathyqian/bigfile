@@ -607,7 +607,7 @@ export function SqlQueryWorkspace({
                       ) : null}
                     </div>
                     {result && result.rows.length > 0 ? (
-                      <div className="flex shrink-0 flex-wrap items-center gap-3">
+                      <div className="flex shrink-0 flex-wrap items-center gap-2">
                         <Button
                           type="button"
                           variant="outline"
