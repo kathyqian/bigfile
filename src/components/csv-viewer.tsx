@@ -147,7 +147,9 @@ function patchRdgHeaderLetterRow(
     root.style.gridTemplateRows = next;
   }
   /* Sticky main-header `top` is `1 * var(--rdg-header-row-height)`; keep it = letter track. */
-  if (root.style.getPropertyValue("--rdg-header-row-height") !== `${letterPx}px`) {
+  if (
+    root.style.getPropertyValue("--rdg-header-row-height") !== `${letterPx}px`
+  ) {
     root.style.setProperty("--rdg-header-row-height", `${letterPx}px`);
   }
 }
@@ -879,7 +881,9 @@ export function CsvViewer() {
           renderCell({ row, column }: RenderCellProps<GridRow>) {
             if (!row.__loaded) {
               return (
-                <span className="text-muted-foreground text-xs font-mono">…</span>
+                <span className="text-muted-foreground text-xs font-mono">
+                  …
+                </span>
               );
             }
             const v = (row as Record<string, unknown>)[column.key];
@@ -1120,12 +1124,12 @@ export function CsvViewer() {
           {status === "init-db" ? (
             <div className="flex min-h-0 flex-1 items-center justify-center">
               <div className="flex w-full max-w-56 flex-col items-center gap-3">
-                <p className="text-muted-foreground text-sm">Loading...</p>
+                <p className="text-muted-foreground text-sm">Initializing…</p>
                 <div
                   className="bg-muted h-1 w-full overflow-hidden rounded-lg"
                   role="progressbar"
                   aria-busy="true"
-                  aria-label="Loading"
+                  aria-label="Initializing"
                 >
                   <div className="bg-primary loading-bar-indeterminate h-full w-1/3 rounded-lg" />
                 </div>
@@ -1157,12 +1161,20 @@ export function CsvViewer() {
               <div className="w-full max-w-md shrink-0">
                 <Empty className="border-border border border-dashed">
                   <EmptyHeader>
-                    <EmptyTitle>Loading CSV…</EmptyTitle>
+                    <EmptyTitle>Loading…</EmptyTitle>
                     <EmptyDescription>
-                      Importing your file (this may take a while for large
-                      files).
+                      Importing your file. This may take a while for large
+                      files.
                     </EmptyDescription>
                   </EmptyHeader>
+                  <div
+                    className="bg-muted h-1 w-full max-w-56 overflow-hidden rounded-lg"
+                    role="progressbar"
+                    aria-busy="true"
+                    aria-label="Loading progress"
+                  >
+                    <div className="bg-primary loading-bar-indeterminate h-full w-1/3 rounded-lg" />
+                  </div>
                 </Empty>
               </div>
             </div>
