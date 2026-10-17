@@ -80,12 +80,15 @@ export function parseChartNumber(v: unknown): number | null {
   }
   if (typeof v === "boolean") return v ? 1 : 0;
   if (typeof v === "string") {
-    const t = v.trim();
+    let t = v.trim();
     if (t === "") return null;
     // "63%" / "-17.5%" → 63 / -17.5 (keep percentage points, not 0–1 fractions)
     if (t.endsWith("%")) {
-      const n = Number(t.slice(0, -1).trim());
-      return Number.isFinite(n) ? n : null;
+      t = t.slice(0, -1).trim();
+    }
+    // Grouped thousands: "1,067" / "1,067.5"
+    if (t.includes(",")) {
+      t = t.replace(/,/g, "");
     }
     const n = Number(t);
     return Number.isFinite(n) ? n : null;

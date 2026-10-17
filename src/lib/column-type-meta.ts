@@ -37,6 +37,10 @@ function baseType(duckdbType: string): string {
   return paren === -1 ? t : t.slice(0, paren);
 }
 
+function isNativeNumericType(duckdbType: string): boolean {
+  return NUMERIC.has(baseType(duckdbType));
+}
+
 /** DATE / TIME types use text-style distinct filters; sorting still uses native column order. */
 const DATE_LIKE = new Set([
   "DATE",
@@ -68,13 +72,19 @@ export function isPercentColumn(meta: ColumnMeta): boolean {
 
 /**
  * SQL expression that yields a DOUBLE for filters, histograms, and numeric sorts.
- * Percent VARCHAR columns ("63%") strip the trailing % before casting.
+ * VARCHAR numeric columns strip grouping commas; percent columns also strip a trailing %.
  */
 export function sqlNumericExpr(quotedIdent: string, meta: ColumnMeta): string {
-  if (isPercentColumn(meta)) {
-    return `TRY_CAST(regexp_replace(trim(CAST(${quotedIdent} AS VARCHAR)), '%$', '') AS DOUBLE)`;
+  if (isNativeNumericType(meta.duckdbType)) {
+    return `TRY_CAST(${quotedIdent} AS DOUBLE)`;
   }
-  return `TRY_CAST(${quotedIdent} AS DOUBLE)`;
+  const trimmed = `trim(CAST(${quotedIdent} AS VARCHAR))`;
+  const noCommas = `replace(${trimmed}, ',', '')`;
+  if (isPercentColumn(meta)) {
+    return `TRY_CAST(regexp_replace(${noCommas}, '%$', '') AS DOUBLE)`;
+  }
+  // Grouped thousands ("1,067") or plain numeric text stored as VARCHAR
+  return `TRY_CAST(${noCommas} AS DOUBLE)`;
 }
 
 function readBigIntish(v: unknown): number {
@@ -84,17 +94,19 @@ function readBigIntish(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+type Conn = {
+  query: (sql: string) => Promise<import("apache-arrow").Table>;
+};
+
 /**
- * True when every non-empty value looks like a percentage ("63%", "-17.5%").
- * Mixed labels such as "MVP: +16%" stay text.
+ * Classify VARCHAR columns whose non-empty values are all numeric text:
+ * plain ("542"), grouped thousands ("1,067"), or percentages ("63%", "-17.5%").
  */
-async function columnLooksLikePercent(
-  conn: {
-    query: (sql: string) => Promise<import("apache-arrow").Table>;
-  },
+async function classifyNumericTextColumn(
+  conn: Conn,
   tableName: string,
   columnName: string,
-): Promise<boolean> {
+): Promise<"percent" | "number" | null> {
   const q = `"${columnName.replace(/"/g, '""')}"`;
   const t = `"${tableName.replace(/"/g, '""')}"`;
   const sql = `
@@ -102,30 +114,42 @@ WITH vals AS (
   SELECT trim(CAST(${q} AS VARCHAR)) AS s
   FROM ${t}
   WHERE ${q} IS NOT NULL AND trim(CAST(${q} AS VARCHAR)) <> ''
+),
+parsed AS (
+  SELECT
+    s,
+    right(s, 1) = '%' AS is_pct,
+    TRY_CAST(
+      replace(
+        CASE WHEN right(s, 1) = '%' THEN left(s, length(s) - 1) ELSE s END,
+        ',',
+        ''
+      ) AS DOUBLE
+    ) AS n
+  FROM vals
 )
 SELECT
   COUNT(*)::BIGINT AS n,
-  COUNT(*) FILTER (
-    WHERE length(s) > 1
-      AND right(s, 1) = '%'
-      AND TRY_CAST(left(s, length(s) - 1) AS DOUBLE) IS NOT NULL
-  )::BIGINT AS n_ok
-FROM vals;
+  COUNT(*) FILTER (WHERE n IS NOT NULL)::BIGINT AS n_ok,
+  COUNT(*) FILTER (WHERE n IS NOT NULL AND is_pct)::BIGINT AS n_pct
+FROM parsed;
 `;
   try {
     const table = await conn.query(sql);
     const n = readBigIntish(table.getChild("n")?.get(0));
     const nOk = readBigIntish(table.getChild("n_ok")?.get(0));
-    return n > 0 && n === nOk;
+    const nPct = readBigIntish(table.getChild("n_pct")?.get(0));
+    if (n === 0 || n !== nOk) return null;
+    if (nPct === n) return "percent";
+    if (nPct === 0) return "number";
+    return null;
   } catch {
-    return false;
+    return null;
   }
 }
 
 export async function fetchTableColumnMeta(
-  conn: {
-    query: (sql: string) => Promise<import("apache-arrow").Table>;
-  },
+  conn: Conn,
   tableName: string,
 ): Promise<ColumnMeta[]> {
   const safe = tableName.replace(/'/g, "''");
@@ -144,12 +168,11 @@ export async function fetchTableColumnMeta(
   await Promise.all(
     out.map(async (meta, i) => {
       if (meta.filterMode !== "text" || meta.typeLabel !== "text") return;
-      if (await columnLooksLikePercent(conn, tableName, meta.name)) {
-        out[i] = {
-          ...meta,
-          filterMode: "numeric",
-          typeLabel: "percent",
-        };
+      const kind = await classifyNumericTextColumn(conn, tableName, meta.name);
+      if (kind === "percent") {
+        out[i] = { ...meta, filterMode: "numeric", typeLabel: "percent" };
+      } else if (kind === "number") {
+        out[i] = { ...meta, filterMode: "numeric", typeLabel: "number" };
       }
     }),
   );
