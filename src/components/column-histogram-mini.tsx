@@ -49,7 +49,7 @@ function numericBinRangeLabel(
   const span = max - min;
   const start = min + (binIndex / binCount) * span;
   const end = binIndex === binCount - 1 ? max : min + ((binIndex + 1) / binCount) * span;
-  return `${formatHistogramNumber(start)} – ${formatHistogramNumber(end)}`;
+  return `${formatHistogramNumber(start)} to ${formatHistogramNumber(end)}`;
 }
 
 function tipDetail(count: number, totalNonNull: number): string {
