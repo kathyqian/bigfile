@@ -1,4 +1,7 @@
-import type { ColumnMeta } from "@/lib/column-type-meta";
+import {
+  sqlNumericExpr,
+  type ColumnMeta,
+} from "@/lib/column-type-meta";
 
 export type SortColumn = {
   columnKey: string;
@@ -61,19 +64,23 @@ export function isNumericFilterActive(f: NumericColumnFilter): boolean {
   return hasMin || hasMax;
 }
 
-function numericFilterSql(col: string, f: NumericColumnFilter): string | null {
-  const q = quoteIdent(col);
+function numericFilterSql(
+  col: string,
+  f: NumericColumnFilter,
+  meta: ColumnMeta,
+): string | null {
+  const expr = sqlNumericExpr(quoteIdent(col), meta);
   if (f.mode === "between") {
     const hasMin = f.min !== undefined && Number.isFinite(f.min);
     const hasMax = f.max !== undefined && Number.isFinite(f.max);
     if (!hasMin && !hasMax) return null;
-    if (hasMin && hasMax) return `${q} BETWEEN ${f.min} AND ${f.max}`;
-    if (hasMin) return `${q} >= ${f.min}`;
-    return `${q} <= ${f.max!}`;
+    if (hasMin && hasMax) return `${expr} BETWEEN ${f.min} AND ${f.max}`;
+    if (hasMin) return `${expr} >= ${f.min}`;
+    return `${expr} <= ${f.max!}`;
   }
   if (!Number.isFinite(f.value)) return null;
   const op = f.op;
-  return `${q} ${op} ${f.value}`;
+  return `${expr} ${op} ${f.value}`;
 }
 
 function textFilterSql(col: string, f: TextColumnFilter): string | null {
@@ -122,7 +129,7 @@ export function buildWhereClause(
     if (!meta) continue;
     if (raw.kind === "numeric" && meta.filterMode === "numeric") {
       if (!isNumericFilterActive(raw)) continue;
-      const sql = numericFilterSql(col, raw);
+      const sql = numericFilterSql(col, raw, meta);
       if (sql) clauses.push(sql);
     } else if (raw.kind === "text" && meta.filterMode === "text") {
       if (!isTextFilterActive(raw)) continue;
@@ -134,11 +141,18 @@ export function buildWhereClause(
   return `WHERE ${clauses.join(" AND ")}`;
 }
 
-export function buildOrderByClause(sortColumns: readonly SortColumn[]): string {
+export function buildOrderByClause(
+  sortColumns: readonly SortColumn[],
+  columnMetaByName?: Map<string, ColumnMeta>,
+): string {
   if (sortColumns.length === 0) return "";
-  const parts = sortColumns.map(
-    (s) => `${quoteIdent(s.columnKey)} ${s.direction}`,
-  );
+  const parts = sortColumns.map((s) => {
+    const q = quoteIdent(s.columnKey);
+    const meta = columnMetaByName?.get(s.columnKey);
+    const expr =
+      meta?.filterMode === "numeric" ? sqlNumericExpr(q, meta) : q;
+    return `${expr} ${s.direction}`;
+  });
   return `ORDER BY ${parts.join(", ")}`;
 }
 

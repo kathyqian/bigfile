@@ -10,7 +10,7 @@ export type ColumnMeta = {
   /** Raw type from DuckDB */
   duckdbType: string;
   filterMode: ColumnFilterMode;
-  /** Shown under the column name (number, text, date) */
+  /** Shown under the column name (number, percent, text, date) */
   typeLabel: string;
 };
 
@@ -62,6 +62,66 @@ export function columnMetaFromDuckdbType(
   return { name, duckdbType, filterMode: "text", typeLabel: "text" };
 }
 
+export function isPercentColumn(meta: ColumnMeta): boolean {
+  return meta.typeLabel === "percent";
+}
+
+/**
+ * SQL expression that yields a DOUBLE for filters, histograms, and numeric sorts.
+ * Percent VARCHAR columns ("63%") strip the trailing % before casting.
+ */
+export function sqlNumericExpr(quotedIdent: string, meta: ColumnMeta): string {
+  if (isPercentColumn(meta)) {
+    return `TRY_CAST(regexp_replace(trim(CAST(${quotedIdent} AS VARCHAR)), '%$', '') AS DOUBLE)`;
+  }
+  return `TRY_CAST(${quotedIdent} AS DOUBLE)`;
+}
+
+function readBigIntish(v: unknown): number {
+  if (v === null || v === undefined) return 0;
+  if (typeof v === "bigint") return Number(v);
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * True when every non-empty value looks like a percentage ("63%", "-17.5%").
+ * Mixed labels such as "MVP: +16%" stay text.
+ */
+async function columnLooksLikePercent(
+  conn: {
+    query: (sql: string) => Promise<import("apache-arrow").Table>;
+  },
+  tableName: string,
+  columnName: string,
+): Promise<boolean> {
+  const q = `"${columnName.replace(/"/g, '""')}"`;
+  const t = `"${tableName.replace(/"/g, '""')}"`;
+  const sql = `
+WITH vals AS (
+  SELECT trim(CAST(${q} AS VARCHAR)) AS s
+  FROM ${t}
+  WHERE ${q} IS NOT NULL AND trim(CAST(${q} AS VARCHAR)) <> ''
+)
+SELECT
+  COUNT(*)::BIGINT AS n,
+  COUNT(*) FILTER (
+    WHERE length(s) > 1
+      AND right(s, 1) = '%'
+      AND TRY_CAST(left(s, length(s) - 1) AS DOUBLE) IS NOT NULL
+  )::BIGINT AS n_ok
+FROM vals;
+`;
+  try {
+    const table = await conn.query(sql);
+    const n = readBigIntish(table.getChild("n")?.get(0));
+    const nOk = readBigIntish(table.getChild("n_ok")?.get(0));
+    return n > 0 && n === nOk;
+  } catch {
+    return false;
+  }
+}
+
 export async function fetchTableColumnMeta(
   conn: {
     query: (sql: string) => Promise<import("apache-arrow").Table>;
@@ -80,5 +140,19 @@ export async function fetchTableColumnMeta(
     const typ = String(typeCol?.get(i) ?? "");
     out.push(columnMetaFromDuckdbType(n, typ));
   }
+
+  await Promise.all(
+    out.map(async (meta, i) => {
+      if (meta.filterMode !== "text" || meta.typeLabel !== "text") return;
+      if (await columnLooksLikePercent(conn, tableName, meta.name)) {
+        out[i] = {
+          ...meta,
+          filterMode: "numeric",
+          typeLabel: "percent",
+        };
+      }
+    }),
+  );
+
   return out;
 }

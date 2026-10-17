@@ -350,7 +350,10 @@ export function CsvViewer() {
       filtersRef.current,
       columnMetaMapRef.current,
     );
-    const orderBy = buildOrderByClause(sortColumnsRef.current);
+    const orderBy = buildOrderByClause(
+      sortColumnsRef.current,
+      columnMetaMapRef.current,
+    );
     const list = cols.map(quoteIdent).join(", ");
 
     let i = start;

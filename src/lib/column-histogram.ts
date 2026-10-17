@@ -1,4 +1,7 @@
-import type { ColumnMeta } from "@/lib/column-type-meta";
+import {
+  sqlNumericExpr,
+  type ColumnMeta,
+} from "@/lib/column-type-meta";
 import { quoteIdent } from "@/lib/csv-query";
 
 export const NUMERIC_BINS = 20;
@@ -60,9 +63,10 @@ export async function fetchColumnHistogram(
   const tail = whereClause.trim() ? ` ${whereClause}` : "";
 
   if (meta.filterMode === "numeric") {
+    const asDouble = sqlNumericExpr(q, meta);
     const boundsSql = `
 WITH filtered AS (
-  SELECT ${q}::DOUBLE AS v
+  SELECT ${asDouble} AS v
   FROM ${tableName}${tail}
 )
 SELECT
@@ -90,7 +94,7 @@ WHERE v IS NOT NULL;
     const span = mx - mn;
     const binSql = `
 WITH filtered AS (
-  SELECT ${q}::DOUBLE AS v
+  SELECT ${asDouble} AS v
   FROM ${tableName}${tail}
 )
 SELECT

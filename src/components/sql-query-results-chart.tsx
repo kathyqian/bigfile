@@ -26,6 +26,7 @@ import {
   chartLabelText,
   formatBestFitEquation,
   formatChartTick,
+  isPercentChartColumn,
   linearBestFit,
   listNonNumericChartColumns,
   listNumericChartColumns,
@@ -220,10 +221,12 @@ function AxisTicksX({
   scale,
   y,
   tickCount = 5,
+  percent = false,
 }: {
   scale: ReturnType<typeof scaleLinear<number>>;
   y: number;
   tickCount?: number;
+  percent?: boolean;
 }) {
   const ticks = scale.ticks(tickCount);
   return (
@@ -236,7 +239,7 @@ function AxisTicksX({
             textAnchor="middle"
             className="fill-muted-foreground font-mono text-[11px]"
           >
-            {formatChartTick(t)}
+            {formatChartTick(t, { percent })}
           </text>
         </g>
       ))}
@@ -248,10 +251,12 @@ function AxisTicksY({
   scale,
   x,
   tickCount = 5,
+  percent = false,
 }: {
   scale: ReturnType<typeof scaleLinear<number>>;
   x: number;
   tickCount?: number;
+  percent?: boolean;
 }) {
   const ticks = scale.ticks(tickCount);
   return (
@@ -265,7 +270,7 @@ function AxisTicksY({
             textAnchor="end"
             className="fill-muted-foreground font-mono text-[11px]"
           >
-            {formatChartTick(t)}
+            {formatChartTick(t, { percent })}
           </text>
         </g>
       ))}
@@ -400,6 +405,11 @@ function CartesianPlot({
   const clipId = `best-fit-${useId().replace(/:/g, "")}`;
   const innerW = Math.max(0, width - M.left - M.right);
   const innerH = Math.max(0, height - M.top - M.bottom);
+  const xIsPercent = kind !== "bar" && isPercentChartColumn(xCol, rows);
+  const yIsPercent =
+    yAggregate !== "count" &&
+    yAggregate !== "countDistinct" &&
+    isPercentChartColumn(yCol, rows);
 
   const { points, skipped, barRows, xDomainCat } = useMemo(() => {
     let skipped = 0;
@@ -485,7 +495,7 @@ function CartesianPlot({
               className="fill-muted/5 stroke-border/60"
               strokeWidth={1}
             />
-            <AxisTicksY scale={yScale} x={0} />
+            <AxisTicksY scale={yScale} x={0} percent={yIsPercent} />
             {barRows.map(([cat, val], i) => {
               const x = xScale(cat);
               if (x == null) return null;
@@ -609,8 +619,8 @@ function CartesianPlot({
             className="fill-muted/5 stroke-border/60"
             strokeWidth={1}
           />
-          <AxisTicksY scale={yScale} x={0} />
-          <AxisTicksX scale={xScale} y={innerH} />
+          <AxisTicksY scale={yScale} x={0} percent={yIsPercent} />
+          <AxisTicksX scale={xScale} y={innerH} percent={xIsPercent} />
           {kind === "scatter"
             ? scaled.map((p, i) => (
                 <circle
@@ -725,6 +735,11 @@ function PiePlot({
   yAggregate: YValueAggregate;
   rows: Record<string, unknown>[];
 }) {
+  const valueIsPercent =
+    yAggregate !== "count" &&
+    yAggregate !== "countDistinct" &&
+    isPercentChartColumn(valueCol, rows);
+
   const { data, skipped } = useMemo(() => {
     const groups = new Map<string, number[]>();
     let skipped = 0;
@@ -821,7 +836,8 @@ function PiePlot({
               />
               <span title={d.label}>{d.label}</span>
               <span className="text-muted-foreground shrink-0 tabular-nums">
-                {formatChartTick(d.value)} ({pct.toFixed(1)}%)
+                {formatChartTick(d.value, { percent: valueIsPercent })} (
+                {pct.toFixed(1)}%)
               </span>
             </li>
           );
