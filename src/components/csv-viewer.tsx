@@ -82,11 +82,12 @@ const GUTTER_CORNER_LETTER_CLASS = "rdg-gutter-corner-letter";
 const GUTTER_HEADER_CLASS = "rdg-csv-header-gutter";
 /** Tier with column names, filters, type label, and histogram. */
 const HEADER_MAIN_ROW_HEIGHT = 92;
-/** Column letters row — same pixel height as body rows ({@link ROW_HEIGHT}). Patched via {@link patchRdgHeaderLetterRow}. */
+/** Column letters row — same pixel height as body rows ({@link ROW_HEIGHT}). */
 const HEADER_LETTER_ROW_HEIGHT = ROW_HEIGHT;
 /**
  * react-data-grid only supports one `headerRowHeight` for every header tier. We pass the
- * average so 2 × this ≈ letter + main, then patch the first two grid tracks after layout.
+ * average so 2 × this ≈ letter + main (keeps fill-grid / viewport math honest), then
+ * {@link patchRdgHeaderLetterRow} sets the real letter and main tracks.
  */
 const HEADER_ROW_UNIFORM_HEIGHT = Math.round(
   (HEADER_LETTER_ROW_HEIGHT + HEADER_MAIN_ROW_HEIGHT) / 2,
@@ -101,7 +102,10 @@ export type GridRow = { __idx: number; __loaded?: boolean } & Record<
   unknown
 >;
 
-/** Narrow letter row + full main row; fixes uniform header height from RDG. */
+/**
+ * Narrow letter row (= body) + full main row; fixes uniform header height from RDG.
+ * Idempotent — safe to re-run from a MutationObserver when RDG resets styles.
+ */
 function patchRdgHeaderLetterRow(
   root: HTMLDivElement,
   letterPx: number,
@@ -110,18 +114,22 @@ function patchRdgHeaderLetterRow(
 ) {
   const gtr = root.style.gridTemplateRows;
   if (!gtr) return;
+  const desired = `${letterPx}px ${mainPx}px`;
   const repeatRe = new RegExp(`^repeat\\(\\s*2\\s*,\\s*${uniformPx}px\\s*\\)`);
   const pairRe = new RegExp(`^${uniformPx}px\\s+${uniformPx}px(?=\\s|$)`);
   let next = gtr;
   if (repeatRe.test(gtr)) {
-    next = gtr.replace(repeatRe, `${letterPx}px ${mainPx}px`);
+    next = gtr.replace(repeatRe, desired);
   } else if (pairRe.test(gtr)) {
-    next = gtr.replace(pairRe, `${letterPx}px ${mainPx}px`);
+    next = gtr.replace(pairRe, desired);
   }
   if (next !== gtr) {
     root.style.gridTemplateRows = next;
   }
-  root.style.setProperty("--rdg-header-row-height", `${letterPx}px`);
+  /* Sticky main-header `top` is `1 * var(--rdg-header-row-height)`; keep it = letter track. */
+  if (root.style.getPropertyValue("--rdg-header-row-height") !== `${letterPx}px`) {
+    root.style.setProperty("--rdg-header-row-height", `${letterPx}px`);
+  }
 }
 
 /** 0-based column index → Excel-style letters (A … Z, AA …). */
@@ -270,9 +278,10 @@ export function CsvViewer() {
 
   useLayoutEffect(() => {
     if (status !== "ready") return;
-    const id = requestAnimationFrame(() => {
-      const root = gridRef.current?.element;
-      if (!root) return;
+    const root = gridRef.current?.element;
+    if (!root) return;
+
+    const apply = () => {
       patchRdgHeaderLetterRow(
         root,
         HEADER_LETTER_ROW_HEIGHT,
@@ -286,9 +295,14 @@ export function CsvViewer() {
       if (corner) {
         corner.style.insetInlineStart = "var(--rdg-frozen-left-0)";
       }
-      updateGridScrollable();
-    });
-    return () => cancelAnimationFrame(id);
+    };
+
+    apply();
+    updateGridScrollable();
+    /* RDG rewrites gridTemplateRows on render (uniform header height); keep letter = body. */
+    const mo = new MutationObserver(apply);
+    mo.observe(root, { attributes: true, attributeFilter: ["style"] });
+    return () => mo.disconnect();
   }, [status, totalRows, columnNames.length, updateGridScrollable]);
 
   const columnMetaMap = useMemo(
