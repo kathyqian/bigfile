@@ -19,8 +19,21 @@ export function AppTopBar({
         className,
       )}
     >
-      <div className="text-foreground text-xs font-medium tracking-[0.14em] uppercase">
-        Bigfile
+      <div className="text-muted-foreground flex min-w-0 items-baseline gap-x-3 text-xs">
+        <span className="text-foreground font-medium tracking-[0.14em] uppercase">
+          Bigfile
+        </span>
+        <span className="font-normal">
+          by{" "}
+          <a
+            href="https://kathyqian.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline-offset-3 hover:text-foreground hover:underline"
+          >
+            Kathy Qian
+          </a>
+        </span>
       </div>
       <div className="flex min-w-0 items-center justify-end gap-2">
         {hasSpreadsheet && fileLabel ? (
