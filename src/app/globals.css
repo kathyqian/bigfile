@@ -159,6 +159,12 @@
   border-inline-end: 1px solid var(--border);
 }
 
+/* Pull sort/filter closer to the edge; pin content to the top (RDG defaults to align-content: center). */
+.rdg-wrap .rdg-header-row .rdg-cell[class*="rdg-csv-header-z-"] {
+  align-content: start;
+  padding-inline-end: 2px;
+}
+
 /*
  * Column resize: same hit width as shadcn ResizableHandle (1px line + ::after w-1).
  * Centered on the border between columns; csv-viewer assigns descending z-index on

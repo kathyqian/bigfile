@@ -19,6 +19,16 @@ import type {
 
 const OPS: NumericCompareOp[] = ["=", "!=", "<", "<=", ">", ">="];
 
+const MODE_ITEMS = [
+  { value: "between", label: "Between" },
+  { value: "cmp", label: "Compare (=, ≠, <, …)" },
+] as const;
+
+const OP_ITEMS = OPS.map((o) => ({ value: o, label: o }));
+
+const SELECT_TRIGGER_CLASS =
+  "border-input bg-background dark:bg-input/30 h-8 w-full";
+
 function numericFilterSignature(f: NumericColumnFilter | undefined): string {
   if (!f || f.kind !== "numeric") return "none";
   if (f.mode === "between") return `b:${f.min ?? ""}:${f.max ?? ""}`;
@@ -112,14 +122,19 @@ export function NumericFilterPopoverBody({ initial, onApply }: Props) {
         <Label className="text-muted-foreground text-xs font-medium">Mode</Label>
         <Select
           value={mode}
+          modal={false}
+          items={MODE_ITEMS.map((o) => ({ value: o.value, label: o.label }))}
           onValueChange={(v) => setMode(v as "between" | "cmp")}
         >
-          <SelectTrigger className="h-8">
+          <SelectTrigger size="sm" className={SELECT_TRIGGER_CLASS}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="between">Between / bounds</SelectItem>
-            <SelectItem value="cmp">Compare (=, ≠, &lt;, …)</SelectItem>
+            {MODE_ITEMS.map((o) => (
+              <SelectItem key={o.value} value={o.value}>
+                {o.label}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
@@ -153,15 +168,17 @@ export function NumericFilterPopoverBody({ initial, onApply }: Props) {
             <Label className="text-muted-foreground text-xs font-medium">Operator</Label>
             <Select
               value={op}
+              modal={false}
+              items={OP_ITEMS}
               onValueChange={(v) => setOp(v as NumericCompareOp)}
             >
-              <SelectTrigger className="h-8">
+              <SelectTrigger size="sm" className={SELECT_TRIGGER_CLASS}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {OPS.map((o) => (
-                  <SelectItem key={o} value={o}>
-                    {o}
+                {OP_ITEMS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -170,7 +187,7 @@ export function NumericFilterPopoverBody({ initial, onApply }: Props) {
           <div className="flex flex-col gap-1">
             <Label className="text-muted-foreground text-xs font-medium">Value</Label>
             <Input
-              className="h-8 font-mono text-xs"
+              className="h-8 w-full font-mono text-xs"
               inputMode="decimal"
               value={cmpV}
               onChange={(e) => setCmpV(e.target.value)}

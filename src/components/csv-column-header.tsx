@@ -138,88 +138,102 @@ export function CsvColumnHeader({
 
   return (
     <div
-      className="flex h-full min-w-0 flex-col gap-0.5 py-0.5 pr-1"
+      className="flex h-full min-w-0 flex-col justify-start gap-2 pt-2 pb-1 pr-0"
       tabIndex={tabIndex}
     >
-      <div className="flex min-w-0 items-center justify-between gap-1.5">
-        <span
-          className="min-w-0 flex-1 truncate text-xs font-medium leading-tight"
-          title={displayName}
-        >
-          {displayName}
-        </span>
-        <div className="flex shrink-0 items-center gap-1">
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={`Sort ${displayName}`}
-                  className={cn(hasSort && "text-primary")}
-                />
-              }
-              onClick={(e) => e.stopPropagation()}
-              onPointerDown={(e) => e.stopPropagation()}
-            >
-              <SortIcon className="size-3.5" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={onSortAsc}>Ascending</DropdownMenuItem>
-              <DropdownMenuItem onClick={onSortDesc}>Descending</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={onSortClear}>Clear sort</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+      <div className="flex min-w-0 items-start justify-between gap-1.5">
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span
+            className="min-w-0 truncate text-xs font-medium leading-tight"
+            title={displayName}
+          >
+            {displayName}
+          </span>
+          <span className="text-muted-foreground truncate text-xs font-normal leading-none">
+            {typeLabel}
+          </span>
+        </div>
+        <div className="flex shrink-0 items-start -mt-[7px]">
+          <div className="inline-flex">
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Sort ${displayName}`}
+                    className={cn(hasSort && "text-primary")}
+                  />
+                }
+                onClick={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <SortIcon className="size-3.5" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={onSortAsc}>Ascending</DropdownMenuItem>
+                <DropdownMenuItem onClick={onSortDesc}>Descending</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={onSortClear}>Clear sort</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
           {st && sortColumns.length > 1 ? (
-            <Badge className="px-1 tabular-nums">{st.priority}</Badge>
+            <Badge className="-ml-1 px-1 tabular-nums">{st.priority}</Badge>
           ) : null}
 
-          <Popover open={filterPopoverOpen} onOpenChange={setFilterPopoverOpen}>
-            <PopoverTrigger
-              render={
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={
-                    hasFilter
-                      ? `Filter (active) — ${displayName}`
-                      : `Filter ${displayName}`
-                  }
-                  aria-pressed={hasFilter}
-                  className={cn(hasFilter && "bg-primary/10 text-primary")}
-                />
-              }
-              onClick={(e) => e.stopPropagation()}
-              onPointerDown={(e) => e.stopPropagation()}
-            >
-              <ListFilter className="size-3.5" />
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-auto p-3">
-              {filterMode === "numeric" ? (
-                <NumericFilterPopoverBody
-                  key={columnKey}
-                  initial={initialNumeric}
-                  onApply={applyFilterAndClose}
-                />
-              ) : (
-                <TextFilterPopoverBody
-                  key={columnKey}
-                  columnKey={columnKey}
-                  initial={initialText}
-                  onApply={applyFilterAndClose}
-                  loadDistinct={loadDistinct}
-                />
-              )}
-            </PopoverContent>
-          </Popover>
+          <div className="inline-flex -ml-1">
+            <Popover open={filterPopoverOpen} onOpenChange={setFilterPopoverOpen}>
+              <PopoverTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={
+                      hasFilter
+                        ? `Filter (active) — ${displayName}`
+                        : `Filter ${displayName}`
+                    }
+                    aria-pressed={hasFilter}
+                    className={cn(hasFilter && "text-primary")}
+                  />
+                }
+                onClick={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <span className="relative inline-flex">
+                  <ListFilter className="size-3.5" />
+                  {hasFilter ? (
+                    <span
+                      aria-hidden
+                      className="bg-primary absolute -top-px -right-px size-1.5 rounded-full"
+                    />
+                  ) : null}
+                </span>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-auto p-3">
+                {filterMode === "numeric" ? (
+                  <NumericFilterPopoverBody
+                    key={columnKey}
+                    initial={initialNumeric}
+                    onApply={applyFilterAndClose}
+                  />
+                ) : (
+                  <TextFilterPopoverBody
+                    key={columnKey}
+                    columnKey={columnKey}
+                    initial={initialText}
+                    onApply={applyFilterAndClose}
+                    loadDistinct={loadDistinct}
+                  />
+                )}
+              </PopoverContent>
+            </Popover>
+          </div>
         </div>
       </div>
-      <span className="text-muted-foreground truncate text-xs leading-tight">
-        {typeLabel}
-      </span>
       <div className="w-full min-w-0">
         <ColumnHistogramMini data={histogram} loading={histogramLoading} />
       </div>
