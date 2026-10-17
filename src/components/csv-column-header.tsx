@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown, ListFilter } from "lucide-react";
 
 import { NumericFilterPopoverBody } from "@/components/csv-filters/numeric-filter-popover";
@@ -22,6 +30,7 @@ import type { ColumnFilterMode } from "@/lib/column-type-meta";
 import type { ColumnFilter, SortColumn } from "@/lib/csv-query";
 import { ColumnHistogramMini } from "@/components/column-histogram-mini";
 import type { ColumnHistogramData } from "@/lib/column-histogram";
+import type { ColumnStats } from "@/lib/column-stats";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -42,6 +51,12 @@ type Props = {
     truncated: boolean;
   }>;
   loadHistogramForColumn: (columnKey: string) => Promise<ColumnHistogramData>;
+  loadStatsForColumn: (columnKey: string) => Promise<ColumnStats>;
+};
+
+type StatsTipState = {
+  clientX: number;
+  clientY: number;
 };
 
 function sortStateForColumn(
@@ -67,6 +82,78 @@ function filterActive(f: ColumnFilter | undefined, mode: ColumnFilterMode): bool
   return false;
 }
 
+function formatStatNumber(n: number | null): string {
+  if (n === null || !Number.isFinite(n)) return "—";
+  return n.toLocaleString(undefined, {
+    maximumFractionDigits: 2,
+  });
+}
+
+function statsRows(stats: ColumnStats | null, loading: boolean): { label: string; value: string }[] {
+  if (stats === null) {
+    return [{ label: loading ? "Loading…" : "…", value: "" }];
+  }
+  if (stats.kind === "empty") {
+    return [{ label: "No values", value: "" }];
+  }
+  if (stats.kind === "categorical") {
+    return [
+      {
+        label: "Unique values",
+        value: stats.uniqueValues.toLocaleString(),
+      },
+    ];
+  }
+  return [
+    { label: "Min", value: formatStatNumber(stats.min) },
+    { label: "Max", value: formatStatNumber(stats.max) },
+    { label: "Average", value: formatStatNumber(stats.average) },
+    { label: "Median", value: formatStatNumber(stats.median) },
+    { label: "Count", value: stats.count.toLocaleString() },
+    { label: "Count distinct", value: stats.countDistinct.toLocaleString() },
+    { label: "Sum", value: formatStatNumber(stats.sum) },
+    { label: "Standard deviation", value: formatStatNumber(stats.stddev) },
+  ];
+}
+
+function ColumnStatsTooltip({
+  tip,
+  rows,
+}: {
+  tip: StatsTipState | null;
+  rows: { label: string; value: string }[];
+}) {
+  if (tip === null || typeof document === "undefined") return null;
+
+  const el = (
+    <div
+      role="tooltip"
+      className="bg-popover text-popover-foreground border-border pointer-events-none fixed z-200 max-w-[min(20rem,calc(100vw-1rem))] rounded-md border px-2.5 py-2 text-xs shadow-md"
+      style={{
+        left: tip.clientX + 12,
+        top: tip.clientY + 12,
+      }}
+    >
+      <dl className="grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5">
+        {rows.map((row) => (
+          <div key={row.label} className="contents">
+            <dt className="text-muted-foreground">{row.label}</dt>
+            {row.value ? (
+              <dd className="text-foreground text-right font-mono tabular-nums">
+                {row.value}
+              </dd>
+            ) : (
+              <dd />
+            )}
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+
+  return createPortal(el, document.body);
+}
+
 export function CsvColumnHeader({
   columnKey,
   displayName,
@@ -81,10 +168,15 @@ export function CsvColumnHeader({
   onFilterApply,
   loadDistinct,
   loadHistogramForColumn,
+  loadStatsForColumn,
 }: Props) {
   const [filterPopoverOpen, setFilterPopoverOpen] = useState(false);
   const [histogram, setHistogram] = useState<ColumnHistogramData | null>(null);
   const [histogramLoading, setHistogramLoading] = useState(true);
+  const [stats, setStats] = useState<ColumnStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsTip, setStatsTip] = useState<StatsTipState | null>(null);
+  const statsRequestRef = useRef(0);
 
   const applyFilterAndClose = useCallback(
     (f: ColumnFilter | null) => {
@@ -117,6 +209,58 @@ export function CsvColumnHeader({
     };
   }, [columnKey, loadHistogramForColumn]);
 
+  useEffect(() => {
+    statsRequestRef.current += 1;
+    setStats(null);
+    setStatsLoading(false);
+  }, [loadStatsForColumn]);
+
+  useLayoutEffect(() => {
+    const hide = () => setStatsTip(null);
+    window.addEventListener("scroll", hide, true);
+    return () => window.removeEventListener("scroll", hide, true);
+  }, []);
+
+  const ensureStats = useCallback(() => {
+    if (stats !== null || statsLoading) return;
+    const req = ++statsRequestRef.current;
+    setStatsLoading(true);
+    void (async () => {
+      try {
+        const next = await loadStatsForColumn(columnKey);
+        if (statsRequestRef.current === req) {
+          setStats(next);
+          setStatsLoading(false);
+        }
+      } catch {
+        if (statsRequestRef.current === req) {
+          setStats({ kind: "empty" });
+          setStatsLoading(false);
+        }
+      }
+    })();
+  }, [columnKey, loadStatsForColumn, stats, statsLoading]);
+
+  const onStatsPointerEnter = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      ensureStats();
+      setStatsTip({ clientX: e.clientX, clientY: e.clientY });
+    },
+    [ensureStats],
+  );
+
+  const onStatsPointerMove = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      ensureStats();
+      setStatsTip({ clientX: e.clientX, clientY: e.clientY });
+    },
+    [ensureStats],
+  );
+
+  const onStatsPointerLeave = useCallback(() => {
+    setStatsTip(null);
+  }, []);
+
   const st = sortStateForColumn(sortColumns, columnKey);
   const hasSort = st !== undefined;
   const hasFilter = filterActive(filter, filterMode);
@@ -138,11 +282,13 @@ export function CsvColumnHeader({
       tabIndex={tabIndex}
     >
       <div className="flex min-w-0 items-start justify-between gap-1.5">
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span
-            className="min-w-0 truncate text-xs font-medium leading-tight"
-            title={displayName}
-          >
+        <div
+          className="flex min-w-0 flex-1 flex-col gap-0.5"
+          onPointerEnter={onStatsPointerEnter}
+          onPointerMove={onStatsPointerMove}
+          onPointerLeave={onStatsPointerLeave}
+        >
+          <span className="min-w-0 truncate text-xs font-medium leading-tight">
             {displayName}
           </span>
           <span className="text-muted-foreground truncate text-xs font-normal leading-none">
@@ -238,6 +384,10 @@ export function CsvColumnHeader({
       <div className="w-full min-w-0">
         <ColumnHistogramMini data={histogram} loading={histogramLoading} />
       </div>
+      <ColumnStatsTooltip
+        tip={statsTip}
+        rows={statsRows(stats, statsLoading && stats === null)}
+      />
     </div>
   );
 }

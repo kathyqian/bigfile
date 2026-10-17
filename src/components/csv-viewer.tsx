@@ -28,6 +28,7 @@ import { arrowTableColumnNames, arrowTableToObjects } from "@/lib/arrow-table";
 import type { ColumnMeta } from "@/lib/column-type-meta";
 import { fetchTableColumnMeta } from "@/lib/column-type-meta";
 import { fetchColumnHistogram } from "@/lib/column-histogram";
+import { fetchColumnStats } from "@/lib/column-stats";
 import {
   buildOrderByClause,
   buildWhereClause,
@@ -370,6 +371,20 @@ export function CsvViewer() {
       }
       const where = buildWhereClause(filters, columnMetaMap);
       return fetchColumnHistogram(conn, tableId, meta, where);
+    },
+    [filters, columnMetaMap],
+  );
+
+  const loadStatsForColumn = useCallback(
+    async (columnKey: string) => {
+      const conn = connRef.current;
+      const meta = columnMetaMap.get(columnKey);
+      const tableId = dataTableNameRef.current;
+      if (!conn || !meta || !tableId) {
+        return { kind: "empty" as const };
+      }
+      const where = buildWhereClause(filters, columnMetaMap);
+      return fetchColumnStats(conn, tableId, meta, where);
     },
     [filters, columnMetaMap],
   );
@@ -857,6 +872,7 @@ export function CsvViewer() {
                 onFilterApply={(f) => handleFilterApply(name, f)}
                 loadDistinct={() => loadDistinctForColumn(name)}
                 loadHistogramForColumn={loadHistogramForColumn}
+                loadStatsForColumn={loadStatsForColumn}
               />
             );
           },
@@ -900,6 +916,7 @@ export function CsvViewer() {
     handleFilterApply,
     loadDistinctForColumn,
     loadHistogramForColumn,
+    loadStatsForColumn,
   ]);
 
   /** Left headers stack above right ones so column resize handles can straddle the shared border. */

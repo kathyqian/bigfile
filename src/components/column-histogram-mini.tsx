@@ -22,22 +22,17 @@ type Props = {
   loading: boolean;
 };
 
+type HistogramTipRow = { label: string; value: string };
+
 type HistogramTooltipState = {
   clientX: number;
   clientY: number;
-  label: string;
-  detail: string;
+  rows: HistogramTipRow[];
 };
 
 function formatHistogramNumber(n: number): string {
   if (!Number.isFinite(n)) return "—";
-  const abs = Math.abs(n);
-  if (abs >= 1e9 || (abs > 0 && abs < 1e-6)) return n.toExponential(3);
-  if (abs >= 1_000_000)
-    return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
-  if (abs >= 1)
-    return n.toLocaleString(undefined, { maximumFractionDigits: 6 });
-  return n.toPrecision(5);
+  return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
 function numericBinRangeLabel(
@@ -52,33 +47,50 @@ function numericBinRangeLabel(
   return `${formatHistogramNumber(start)} to ${formatHistogramNumber(end)}`;
 }
 
-function tipDetail(count: number, totalNonNull: number): string {
+function tipShare(count: number, totalNonNull: number): string {
   const pct = totalNonNull > 0 ? (100 * count) / totalNonNull : 0;
-  const rows = count === 1 ? "1 row" : `${count.toLocaleString()} rows`;
-  return `${rows} (${pct.toFixed(1)}%)`;
+  return `${pct.toLocaleString(undefined, { maximumFractionDigits: 2 })}%`;
+}
+
+function tipCountRows(
+  primary: HistogramTipRow,
+  count: number,
+  totalNonNull: number,
+): HistogramTipRow[] {
+  return [
+    primary,
+    { label: "Count", value: count.toLocaleString() },
+    { label: "Share", value: tipShare(count, totalNonNull) },
+  ];
 }
 
 function buildNumericTip(
   data: Extract<ColumnHistogramData, { kind: "numeric" }>,
   binIndex: number,
   count: number,
-): { label: string; detail: string } {
-  return {
-    label: numericBinRangeLabel(data.min, data.max, binIndex, NUMERIC_BINS),
-    detail: tipDetail(count, data.totalNonNull),
-  };
+): HistogramTipRow[] {
+  return tipCountRows(
+    {
+      label: "Range",
+      value: numericBinRangeLabel(data.min, data.max, binIndex, NUMERIC_BINS),
+    },
+    count,
+    data.totalNonNull,
+  );
 }
 
 function buildCategoricalTip(
   data: Extract<ColumnHistogramData, { kind: "categorical" }>,
   i: number,
   count: number,
-): { label: string; detail: string } {
+): HistogramTipRow[] {
   const raw = data.labels[i] ?? "";
-  return {
-    label: raw === "Other" ? "Other" : raw ? raw : "(empty string)",
-    detail: tipDetail(count, data.totalNonNull),
-  };
+  const value = raw === "Other" ? "Other" : raw ? raw : "(empty string)";
+  return tipCountRows(
+    { label: "Value", value },
+    count,
+    data.totalNonNull,
+  );
 }
 
 function HistogramTooltip({ tip }: { tip: HistogramTooltipState | null }) {
@@ -93,10 +105,16 @@ function HistogramTooltip({ tip }: { tip: HistogramTooltipState | null }) {
         top: tip.clientY + 12,
       }}
     >
-      <div className="text-foreground font-medium wrap-break-word">{tip.label}</div>
-      <div className="text-muted-foreground mt-0.5 font-mono tabular-nums">
-        {tip.detail}
-      </div>
+      <dl className="grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5">
+        {tip.rows.map((row) => (
+          <div key={row.label} className="contents">
+            <dt className="text-muted-foreground">{row.label}</dt>
+            <dd className="text-foreground max-w-[14rem] truncate text-right font-mono tabular-nums">
+              {row.value}
+            </dd>
+          </div>
+        ))}
+      </dl>
     </div>
   );
 
@@ -139,8 +157,7 @@ function Bars({
     onTipChange({
       clientX,
       clientY,
-      label: payload.label,
-      detail: payload.detail,
+      rows: payload,
     });
   };
 
@@ -157,8 +174,7 @@ function Bars({
     onTipChange({
       clientX,
       clientY,
-      label: payload.label,
-      detail: payload.detail,
+      rows: payload,
     });
   };
 
