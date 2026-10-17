@@ -183,10 +183,10 @@ function AxisTitleY({
 }
 
 const CHART_KINDS: { id: QueryChartKind; label: string }[] = [
-  { id: "scatter", label: "Scatter" },
-  { id: "line", label: "Line" },
-  { id: "bar", label: "Bar" },
-  { id: "pie", label: "Pie" },
+  { id: "scatter", label: "Scatter Plot" },
+  { id: "line", label: "Line Chart" },
+  { id: "bar", label: "Bar Chart" },
+  { id: "pie", label: "Pie Chart" },
 ];
 
 export function queryChartKindLabel(kind: QueryChartKind): string {
