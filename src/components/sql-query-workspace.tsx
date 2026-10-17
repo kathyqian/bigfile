@@ -34,6 +34,11 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { quoteIdent } from "@/lib/csv-query";
 import {
   downloadCsvText,
@@ -540,33 +545,36 @@ export function SqlQueryWorkspace({
                   >
                     <div className="bg-muted/15 flex h-full min-h-0 flex-col border-t-0">
                       <div className="text-muted-foreground flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3 text-xs">
-                        <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
-                          <label
-                            htmlFor={editorId}
-                            className="text-foreground shrink-0 font-medium uppercase tracking-[0.14em]"
-                          >
-                            Editor
-                          </label>
-                          <span className="max-w-full font-normal wrap-break-word">
+                        <label
+                          htmlFor={editorId}
+                          className="text-foreground shrink-0 font-medium uppercase tracking-[0.14em]"
+                        >
+                          Editor
+                        </label>
+                        <div className="flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-x-3 gap-y-2">
+                          <span className="font-normal">
                             Max {QUERY_RESULT_ROW_LIMIT.toLocaleString()} rows
                             for SELECT and WITH
                           </span>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-2">
-                          <span className="hidden text-xs sm:inline">
-                            ⌘↵ / Ctrl+Enter
-                          </span>
-                          <Button
-                            type="button"
-                            size="sm"
-                            className="gap-1.5"
-                            disabled={queryDataDisabled || running}
-                            onClick={() => onRun()}
-                            aria-label="Run query"
-                          >
-                            <Play className="size-3.5 fill-current" />
-                            Run Query
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger
+                              delay={0}
+                              render={
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  className="shrink-0 gap-1.5"
+                                  disabled={queryDataDisabled || running}
+                                  onClick={() => onRun()}
+                                  aria-label="Run query"
+                                />
+                              }
+                            >
+                              <Play className="size-3.5 fill-current" />
+                              Run Query
+                            </TooltipTrigger>
+                            <TooltipContent>⌘↵ / Ctrl+Enter</TooltipContent>
+                          </Tooltip>
                         </div>
                       </div>
                       <div className="flex min-h-0 flex-1 flex-col px-4 pb-4">
