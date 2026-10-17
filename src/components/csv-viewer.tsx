@@ -78,6 +78,8 @@ const GUTTER_LABEL_CLASS =
   "font-normal font-mono tabular-nums text-xs text-muted-foreground";
 /** Grouped letter-row cell above the row-number column; RDG omits frozen inset on group headers. */
 const GUTTER_CORNER_LETTER_CLASS = "rdg-gutter-corner-letter";
+/** Frozen row-index header in the name/histogram tier — must stack above resize z-index CSS. */
+const GUTTER_HEADER_CLASS = "rdg-csv-header-gutter";
 /** Tier with column names, filters, type label, and histogram. */
 const HEADER_MAIN_ROW_HEIGHT = 92;
 /** Column letters row — same pixel height as body rows ({@link ROW_HEIGHT}). Patched via {@link patchRdgHeaderLetterRow}. */
@@ -610,6 +612,7 @@ export function CsvViewer() {
           frozen: true,
           draggable: false,
           sortable: false,
+          headerCellClass: GUTTER_HEADER_CLASS,
           renderHeaderCell() {
             return <span className="sr-only">Row numbers</span>;
           },
