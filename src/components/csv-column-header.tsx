@@ -5,7 +5,6 @@ import { ArrowDown, ArrowUp, ArrowUpDown, ListFilter } from "lucide-react";
 
 import { NumericFilterPopoverBody } from "@/components/csv-filters/numeric-filter-popover";
 import { TextFilterPopoverBody } from "@/components/csv-filters/text-filter-popover";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -48,13 +47,10 @@ type Props = {
 function sortStateForColumn(
   sortColumns: readonly SortColumn[],
   columnKey: string,
-): { direction: "ASC" | "DESC"; priority: number } | undefined {
+): { direction: "ASC" | "DESC" } | undefined {
   const i = sortColumns.findIndex((s) => s.columnKey === columnKey);
   if (i < 0) return undefined;
-  return {
-    direction: sortColumns[i].direction,
-    priority: i + 1,
-  };
+  return { direction: sortColumns[i].direction };
 }
 
 function filterActive(f: ColumnFilter | undefined, mode: ColumnFilterMode): boolean {
@@ -169,7 +165,15 @@ export function CsvColumnHeader({
                 onClick={(e) => e.stopPropagation()}
                 onPointerDown={(e) => e.stopPropagation()}
               >
-                <SortIcon className="size-3.5" />
+                <span className="relative inline-flex">
+                  <SortIcon className="size-3.5" />
+                  {hasSort ? (
+                    <span
+                      aria-hidden
+                      className="bg-primary absolute -top-px -right-px size-1.5 rounded-full"
+                    />
+                  ) : null}
+                </span>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={onSortAsc}>Ascending</DropdownMenuItem>
@@ -179,9 +183,6 @@ export function CsvColumnHeader({
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-          {st && sortColumns.length > 1 ? (
-            <Badge className="-ml-2 px-1 tabular-nums">{st.priority}</Badge>
-          ) : null}
 
           <div className="inline-flex -ml-2">
             <Popover open={filterPopoverOpen} onOpenChange={setFilterPopoverOpen}>
