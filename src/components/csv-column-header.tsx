@@ -180,10 +180,10 @@ export function CsvColumnHeader({
             </DropdownMenu>
           </div>
           {st && sortColumns.length > 1 ? (
-            <Badge className="-ml-1 px-1 tabular-nums">{st.priority}</Badge>
+            <Badge className="-ml-2 px-1 tabular-nums">{st.priority}</Badge>
           ) : null}
 
-          <div className="inline-flex -ml-1">
+          <div className="inline-flex -ml-2">
             <Popover open={filterPopoverOpen} onOpenChange={setFilterPopoverOpen}>
               <PopoverTrigger
                 render={
