@@ -5,17 +5,30 @@ function formatCsvCell(v: unknown): string {
   return s;
 }
 
+/** CSV header line (no trailing newline). */
+export function queryResultCsvHeader(columns: readonly string[]): string {
+  return columns.map((c) => formatCsvCell(c)).join(",");
+}
+
+/** CSV body lines for a batch of rows (no trailing newline on last line). */
+export function queryResultCsvBody(
+  columns: readonly string[],
+  rows: readonly Record<string, unknown>[],
+): string {
+  if (rows.length === 0) return "";
+  return rows
+    .map((row) => columns.map((c) => formatCsvCell(row[c])).join(","))
+    .join("\n");
+}
+
 /** Build a CSV string (header + rows) from a query result table. */
 export function queryResultToCsv(
   columns: readonly string[],
   rows: readonly Record<string, unknown>[],
 ): string {
-  const header = columns.map((c) => formatCsvCell(c)).join(",");
+  const header = queryResultCsvHeader(columns);
   if (rows.length === 0) return `${header}\n`;
-  const body = rows
-    .map((row) => columns.map((c) => formatCsvCell(row[c])).join(","))
-    .join("\n");
-  return `${header}\n${body}\n`;
+  return `${header}\n${queryResultCsvBody(columns, rows)}\n`;
 }
 
 /** Trigger a browser download of the given CSV text. */
