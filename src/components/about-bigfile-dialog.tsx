@@ -44,6 +44,15 @@ export function AboutBigfileDialog({
               >
                 Kathy Qian
               </a>
+              . Full source code on{" "}
+              <a
+                href="https://github.com/kathyqian/bigfile"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-3 hover:text-foreground"
+              >
+                GitHub
+              </a>
               .
             </p>
           </div>
